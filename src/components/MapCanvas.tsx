@@ -410,18 +410,30 @@ const MapCanvas = ({
             'fill-extrusion-color': [
               'case',
               ['boolean', ['feature-state', 'highlight'], false],
-              '#fbbf24',
+              '#facc15',
               ['has', 'colour'],
               ['get', 'colour'],
-              '#d1d5db'
+              [
+                'interpolate',
+                ['linear'],
+                ['coalesce', ['get', 'height'], ['get', 'render_height'], 30],
+                0,
+                '#e2e8f0',
+                60,
+                '#cbd5f5',
+                200,
+                '#94a3b8',
+                400,
+                '#64748b'
+              ]
             ],
             'fill-extrusion-height': [
               'case',
               ['has', 'render_height'],
-              ['get', 'render_height'],
+              ['*', ['get', 'render_height'], 1.1],
               ['has', 'height'],
-              ['get', 'height'],
-              20
+              ['*', ['get', 'height'], 1.05],
+              35
             ],
             'fill-extrusion-base': [
               'case',
@@ -431,7 +443,8 @@ const MapCanvas = ({
               ['get', 'min_height'],
               0
             ],
-            'fill-extrusion-opacity': 0.92
+            'fill-extrusion-opacity': 0.96,
+            'fill-extrusion-vertical-gradient': true
           }
         },
         beforeLayerId

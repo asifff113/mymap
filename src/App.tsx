@@ -142,10 +142,17 @@ const App = () => {
       const next = !prev;
       setViewState((state) => ({
         ...state,
-        pitch: next ? Math.max(state.pitch, 58) : state.pitch
+        pitch: next ? Math.max(state.pitch, 68) : Math.min(state.pitch, 50),
+        bearing: next ? (state.bearing || 35) : state.bearing,
+        zoom: next ? Math.max(state.zoom, 15) : state.zoom
       }));
       return next;
     });
+    setStatusMessage((prev) =>
+      prev && prev.includes('buildings')
+        ? prev
+        : '3D buildings are experimental – zoom closer to city centers for taller extrusions.'
+    );
   };
 
   const buildRoute = useCallback(
