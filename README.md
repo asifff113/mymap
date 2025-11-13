@@ -8,7 +8,7 @@ An experimental web app that mimics core Google Maps / Google Earth behaviors wi
 - 🔍 Type-ahead place search backed by the Nominatim API (OpenStreetMap)
 - 📍 Markers for selected places, user position, and waypoints
 - 🧭 Route planning powered by OSRM with distance/time estimates and drive/bike/walk modes
-- 🛰️ Earth globe mode with NASA Blue Marble satellite imagery, atmospheric fog, sky, and 3D terrain that fades back to vector maps as you zoom in
+- 🛰️ Earth globe mode with NASA Blue Marble satellite imagery, atmospheric fog, sky, 3D terrain, and optional building extrusions
 - 🧭 Map controls for navigation, geolocation, and globe toggling
 
 ## Getting started

@@ -49,6 +49,7 @@ const App = () => {
   const [routeProfile, setRouteProfile] = useState<RouteProfile>('driving');
   const [isRouting, setIsRouting] = useState(false);
   const [isGlobeView, setIsGlobeView] = useState(false);
+  const [showBuildings, setShowBuildings] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const handleViewStateChange = useCallback((next: ViewState) => {
@@ -127,11 +128,21 @@ const App = () => {
       const next = !prev;
       setViewState((state) => ({
         ...state,
-        // Center globe at the top: latitude 80, pitch 55, bearing 30, zoom 2.7
         lat: next ? 80 : state.lat,
         pitch: next ? 55 : 0,
         bearing: next ? 30 : 0,
         zoom: next ? 2.7 : state.zoom
+      }));
+      return next;
+    });
+  };
+
+  const toggleBuildings = () => {
+    setShowBuildings((prev) => {
+      const next = !prev;
+      setViewState((state) => ({
+        ...state,
+        pitch: next ? Math.max(state.pitch, 58) : state.pitch
       }));
       return next;
     });
@@ -221,6 +232,7 @@ const App = () => {
         userLocation={userLocation}
         route={route}
         isGlobeView={isGlobeView}
+        showBuildings={showBuildings}
         onViewStateChange={handleViewStateChange}
       />
 
@@ -258,9 +270,11 @@ const App = () => {
               styles={MAP_STYLES}
               activeStyleId={activeStyle.id}
               isGlobeView={isGlobeView}
+              showBuildings={showBuildings}
               onStyleChange={handleStyleChange}
               onLocateMe={handleLocateMe}
               onToggleGlobe={toggleGlobeView}
+              onToggleBuildings={toggleBuildings}
             />
             {!isGlobeView && (
               <section className="glass-panel" aria-live="polite">

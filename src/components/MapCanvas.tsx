@@ -16,6 +16,7 @@ interface MapCanvasProps {
   userLocation: LatLng | null;
   route: RouteSummary | null;
   isGlobeView: boolean;
+  showBuildings: boolean;
   onViewStateChange: (view: ViewState) => void;
 }
 
@@ -30,6 +31,8 @@ const SATELLITE_TILES =
   'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg';
 const SATELLITE_FADE_START = 2.2;
 const SATELLITE_FADE_END = 5.5;
+const BUILDING_LAYER_ID = 'custom-3d-buildings';
+const BUILDING_SOURCE_LAYER = 'building';
 
 const MapCanvas = ({
   viewState,
@@ -40,6 +43,7 @@ const MapCanvas = ({
   userLocation,
   route,
   isGlobeView,
+  showBuildings,
   onViewStateChange
 }: MapCanvasProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -348,6 +352,111 @@ const MapCanvas = ({
     }
   };
 
+  const findVectorSourceForBuildings = (): { sourceId: string; sourceLayer: string } | null => {
+    const map = mapRef.current;
+    if (!map) {
+      return null;
+    }
+
+    const style = map.getStyle();
+    if (!style?.sources) {
+      return null;
+    }
+
+    if (style.sources.openmaptiles) {
+      return { sourceId: 'openmaptiles', sourceLayer: BUILDING_SOURCE_LAYER };
+    }
+    if (style.sources.composite) {
+      return { sourceId: 'composite', sourceLayer: BUILDING_SOURCE_LAYER };
+    }
+
+    const firstVectorSource = Object.entries(style.sources).find(([, source]) => source.type === 'vector');
+    if (firstVectorSource) {
+      return { sourceId: firstVectorSource[0], sourceLayer: BUILDING_SOURCE_LAYER };
+    }
+
+    return null;
+  };
+
+  const findLabelLayerId = (): string | undefined => {
+    const map = mapRef.current;
+    const style = map?.getStyle();
+    return style?.layers?.find((layer) => layer.type === 'symbol')?.id;
+  };
+
+  const ensureBuildingLayer = () => {
+    const map = mapRef.current;
+    if (!map || !showBuildings) {
+      return;
+    }
+
+    const sourceHint = findVectorSourceForBuildings();
+    if (!sourceHint) {
+      return;
+    }
+
+    if (map.getLayer(BUILDING_LAYER_ID)) {
+      map.setLayoutProperty(BUILDING_LAYER_ID, 'visibility', 'visible');
+    } else {
+      const beforeLayerId = findLabelLayerId();
+      map.addLayer(
+        {
+          id: BUILDING_LAYER_ID,
+          type: 'fill-extrusion',
+          source: sourceHint.sourceId,
+          'source-layer': sourceHint.sourceLayer,
+          minzoom: 12,
+          paint: {
+            'fill-extrusion-color': [
+              'case',
+              ['boolean', ['feature-state', 'highlight'], false],
+              '#fbbf24',
+              ['has', 'colour'],
+              ['get', 'colour'],
+              '#d1d5db'
+            ],
+            'fill-extrusion-height': [
+              'case',
+              ['has', 'render_height'],
+              ['get', 'render_height'],
+              ['has', 'height'],
+              ['get', 'height'],
+              20
+            ],
+            'fill-extrusion-base': [
+              'case',
+              ['has', 'render_min_height'],
+              ['get', 'render_min_height'],
+              ['has', 'min_height'],
+              ['get', 'min_height'],
+              0
+            ],
+            'fill-extrusion-opacity': 0.92
+          }
+        },
+        beforeLayerId
+      );
+    }
+
+    map.setLight({
+      anchor: 'map',
+      color: 'hsl(0, 0%, 100%)',
+      intensity: 0.6,
+      position: [1.15, 180, 80]
+    });
+  };
+
+  const removeBuildingLayer = () => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+    if (map.getLayer(BUILDING_LAYER_ID)) {
+      map.removeLayer(BUILDING_LAYER_ID);
+    }
+    map.setLight({});
+  };
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) {
@@ -402,6 +511,16 @@ const MapCanvas = ({
       }
     });
   }, [isGlobeView, mapStyle]);
+
+  useEffect(() => {
+    withStyleReady(() => {
+      if (showBuildings) {
+        ensureBuildingLayer();
+      } else {
+        removeBuildingLayer();
+      }
+    });
+  }, [showBuildings, mapStyle]);
 
   useEffect(() => {
     const map = mapRef.current;

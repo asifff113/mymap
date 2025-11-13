@@ -246,6 +246,12 @@ select {
   cursor: not-allowed;
 }
 
+.ghost-btn.active {
+  background: #0f172a;
+  color: #f8fafc;
+  border-color: rgba(15, 23, 42, 0.55);
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
