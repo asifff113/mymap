@@ -1,5 +1,5 @@
 import type { Feature, LineString } from 'geojson';
-import type { LatLng, RouteSummary } from '../types';
+import type { LatLng, RouteProfile, RouteSummary } from '../types';
 
 const OSRM_BASE = 'https://router.project-osrm.org';
 
@@ -14,7 +14,11 @@ interface OSRMResponse {
   routes: OSRMRoute[];
 }
 
-export const requestRoute = async (origin: LatLng, destination: LatLng): Promise<RouteSummary> => {
+export const requestRoute = async (
+  origin: LatLng,
+  destination: LatLng,
+  profile: RouteProfile = 'driving'
+): Promise<RouteSummary> => {
   const coordinates = `${origin.lng},${origin.lat};${destination.lng},${destination.lat}`;
   const params = new URLSearchParams({
     overview: 'full',
@@ -22,7 +26,7 @@ export const requestRoute = async (origin: LatLng, destination: LatLng): Promise
     steps: 'false'
   });
 
-  const response = await fetch(`${OSRM_BASE}/route/v1/driving/${coordinates}?${params.toString()}`);
+  const response = await fetch(`${OSRM_BASE}/route/v1/${profile}/${coordinates}?${params.toString()}`);
   if (!response.ok) {
     throw new Error('Unable to fetch a route right now.');
   }

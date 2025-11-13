@@ -35,3 +35,5 @@ export interface MapStyleOption {
 }
 
 export type WaypointRole = 'origin' | 'destination';
+
+export type RouteProfile = 'driving' | 'walking' | 'cycling';

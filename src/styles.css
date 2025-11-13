@@ -89,22 +89,22 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  width: min(380px, calc(100vw - 2rem));
+  width: min(320px, calc(100vw - 2rem));
   z-index: 10;
 }
 
 .glass-panel {
   background: rgba(255, 255, 255, 0.92);
-  border-radius: 18px;
-  padding: 1rem;
-  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.15);
-  backdrop-filter: blur(12px);
+  border-radius: 16px;
+  padding: 0.85rem;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(10px);
   border: 1px solid rgba(148, 163, 184, 0.25);
 }
 
 .panel-title {
-  margin: 0 0 0.5rem;
-  font-size: 1.05rem;
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #0f172a;
 }
@@ -126,7 +126,7 @@ select {
   width: 100%;
   border-radius: 12px;
   border: 1px solid #cbd5f5;
-  padding: 0.65rem 0.9rem;
+  padding: 0.55rem 0.8rem;
   background: rgba(255, 255, 255, 0.95);
   color: #0f172a;
 }
@@ -139,8 +139,9 @@ select {
   background: #2563eb;
   color: white;
   font-weight: 600;
+  font-size: 0.9rem;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .primary-btn:disabled {
@@ -150,6 +151,12 @@ select {
 
 .primary-btn:not(:disabled):hover {
   background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.primary-btn:not(:disabled):active {
+  transform: translateY(0);
 }
 
 .action-row {
@@ -165,14 +172,24 @@ select {
   flex: 1;
   border-radius: 12px;
   border: 1px solid rgba(15, 23, 42, 0.2);
-  padding: 0.65rem 0.9rem;
+  padding: 0.55rem 0.85rem;
   background: rgba(255, 255, 255, 0.8);
   cursor: pointer;
   font-weight: 600;
+  font-size: 0.85rem;
+  color: #0f172a;
+  transition: all 0.15s ease;
+}
+
+.ghost-btn:not(:disabled):hover {
+  background: rgba(255, 255, 255, 1);
+  border-color: rgba(15, 23, 42, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.1);
 }
 
 .ghost-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -266,11 +283,25 @@ select {
   border-radius: 999px;
   padding: 0.35rem 0.7rem;
   font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .chip-btn:hover {
-  background: rgba(37, 99, 235, 0.15);
+  background: rgba(37, 99, 235, 0.2);
+  border-color: rgba(37, 99, 235, 0.5);
+  transform: translateY(-1px);
+}
+
+.chip-btn:active {
+  transform: translateY(0);
+}
+
+.chip-btn.active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #1d4ed8;
 }
 
 .status-banner {
@@ -284,6 +315,39 @@ select {
 
 .status-banner p {
   margin: 0.15rem 0;
+}
+
+.mode-toggle {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.pill-btn {
+  flex: 1;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  padding: 0.4rem 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background: rgba(248, 250, 252, 0.9);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pill-btn:hover {
+  background: rgba(241, 245, 249, 1);
+  border-color: rgba(15, 23, 42, 0.3);
+}
+
+.pill-btn.active {
+  background: #0f766e;
+  color: #ecfdf5;
+  border-color: rgba(15, 118, 110, 0.75);
+}
+
+.pill-btn.active:hover {
+  background: #0d9488;
 }
 
 @media (max-width: 768px) {

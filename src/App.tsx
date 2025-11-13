@@ -1,10 +1,18 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import MapCanvas from './components/MapCanvas';
 import SearchPanel from './components/SearchPanel';
 import RoutePlanner from './components/RoutePlanner';
 import ControlPanel from './components/ControlPanel';
 import { requestRoute } from './lib/osrm';
-import type { LatLng, MapStyleOption, PlaceResult, RouteSummary, ViewState, WaypointRole } from './types';
+import type {
+  LatLng,
+  MapStyleOption,
+  PlaceResult,
+  RouteProfile,
+  RouteSummary,
+  ViewState,
+  WaypointRole
+} from './types';
 
 const MAP_STYLES: MapStyleOption[] = [
   {
@@ -37,6 +45,7 @@ const App = () => {
   const [destination, setDestination] = useState<PlaceResult | null>(null);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [route, setRoute] = useState<RouteSummary | null>(null);
+  const [routeProfile, setRouteProfile] = useState<RouteProfile>('driving');
   const [isRouting, setIsRouting] = useState(false);
   const [isGlobeView, setIsGlobeView] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -125,23 +134,38 @@ const App = () => {
     });
   };
 
-  const handleRouteRequest = async () => {
-    if (!(origin && destination)) {
-      return;
-    }
+  const buildRoute = useCallback(
+    async (profileOverride?: RouteProfile) => {
+      if (!(origin && destination)) {
+        return;
+      }
 
-    setIsRouting(true);
-    setStatusMessage(null);
+      const targetProfile = profileOverride ?? routeProfile;
+      setIsRouting(true);
+      setStatusMessage(null);
 
-    try {
-      const nextRoute = await requestRoute(origin, destination);
-      setRoute(nextRoute);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : 'We could not compute a route right now.';
-      setStatusMessage(reason);
-      setRoute(null);
-    } finally {
-      setIsRouting(false);
+      try {
+        const nextRoute = await requestRoute(origin, destination, targetProfile);
+        setRoute(nextRoute);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'We could not compute a route right now.';
+        setStatusMessage(reason);
+        setRoute(null);
+      } finally {
+        setIsRouting(false);
+      }
+    },
+    [destination, origin, routeProfile]
+  );
+
+  const handleRouteRequest = () => {
+    void buildRoute();
+  };
+
+  const handleProfileChange = (profile: RouteProfile) => {
+    setRouteProfile(profile);
+    if (origin && destination) {
+      void buildRoute(profile);
     }
   };
 
@@ -150,13 +174,21 @@ const App = () => {
       return statusMessage;
     }
     if (route) {
-      return 'Route ready – the map highlights your path.';
+      const profileLabel =
+        routeProfile === 'cycling' ? 'Cycling' : routeProfile === 'walking' ? 'Walking' : 'Driving';
+      return `${profileLabel} route ready – the highlighted path follows your selections.`;
     }
     if (isGlobeView) {
       return 'Globe mode is on – spin the earth then zoom closer for standard detail.';
     }
     return 'Pick an origin and destination using the search results to build a route.';
-  }, [route, statusMessage, isGlobeView]);
+  }, [route, statusMessage, isGlobeView, routeProfile]);
+
+  useEffect(() => {
+    if (origin && destination && !route && !isRouting) {
+      void buildRoute();
+    }
+  }, [origin, destination, route, isRouting, buildRoute]);
 
   return (
     <div className={`app-shell ${isGlobeView ? 'globe-mode' : ''}`}>
@@ -177,11 +209,13 @@ const App = () => {
         <RoutePlanner
           origin={origin}
           destination={destination}
+          profile={routeProfile}
           onSwap={handleSwap}
           onClear={handleClear}
           onRequestRoute={handleRouteRequest}
           loading={isRouting}
           route={route}
+          onProfileChange={handleProfileChange}
         />
         <ControlPanel
           styles={MAP_STYLES}
