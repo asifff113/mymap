@@ -25,6 +25,58 @@ body {
   min-height: 100vh;
 }
 
+.app-shell.globe-mode {
+  background: radial-gradient(circle at 20% 20%, rgba(15, 23, 42, 0.35), rgba(2, 6, 23, 0.9) 60%);
+}
+
+.app-shell.globe-mode .glass-panel {
+  background: rgba(15, 23, 42, 0.7);
+  color: #e2e8f0;
+  border-color: rgba(51, 65, 85, 0.6);
+}
+
+.app-shell.globe-mode .panel-title {
+  color: #f8fafc;
+}
+
+.app-shell.globe-mode .status-banner {
+  background: rgba(30, 41, 59, 0.75);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+}
+
+.app-shell.globe-mode .input-field {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+}
+
+.app-shell.globe-mode .input-field::placeholder {
+  color: rgba(226, 232, 240, 0.6);
+}
+
+.app-shell.globe-mode .result-description {
+  color: #cbd5e1;
+}
+
+.app-shell.globe-mode .toggle-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+}
+
+.app-shell.globe-mode .toggle-btn.active {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #6ee7b7;
+}
+
+.app-shell.globe-mode .ghost-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+}
+
 .map-canvas {
   position: absolute;
   inset: 0;
@@ -75,7 +127,8 @@ select {
   border-radius: 12px;
   border: 1px solid #cbd5f5;
   padding: 0.65rem 0.9rem;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.95);
+  color: #0f172a;
 }
 
 .primary-btn {

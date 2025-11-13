@@ -1,6 +1,12 @@
 import { useEffect, useRef } from 'react';
-import maplibregl, { Map as MapLibreMap, Marker, NavigationControl, ScaleControl, GeoJSONSource } from 'maplibre-gl';
-import type { MapStyleOption, PlaceResult, RouteSummary, ViewState, LatLng } from '../types';
+import maplibregl, {
+  GeoJSONSource,
+  Map as MapLibreMap,
+  Marker,
+  NavigationControl,
+  ScaleControl
+} from 'maplibre-gl';
+import type { LatLng, MapStyleOption, PlaceResult, RouteSummary, ViewState } from '../types';
 
 interface MapCanvasProps {
   viewState: ViewState;
@@ -10,11 +16,21 @@ interface MapCanvasProps {
   destination: PlaceResult | null;
   userLocation: LatLng | null;
   route: RouteSummary | null;
+  isGlobeView: boolean;
   onViewStateChange: (view: ViewState) => void;
 }
 
 const ROUTE_SOURCE_ID = 'route-source';
 const ROUTE_LAYER_ID = 'route-line';
+const TERRAIN_SOURCE_ID = 'terrain-dem';
+const SKY_LAYER_ID = 'atmosphere-sky';
+const SATELLITE_SOURCE_ID = 'earth-blue-marble';
+const SATELLITE_LAYER_ID = 'earth-blue-marble-layer';
+const TERRAIN_TILESET_URL = 'https://demotiles.maplibre.org/tiles/terrain-tiles.json';
+const SATELLITE_TILES =
+  'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief/default/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg';
+const SATELLITE_FADE_START = 2.2;
+const SATELLITE_FADE_END = 5.5;
 
 const MapCanvas = ({
   viewState,
@@ -24,6 +40,7 @@ const MapCanvas = ({
   destination,
   userLocation,
   route,
+  isGlobeView,
   onViewStateChange
 }: MapCanvasProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -32,6 +49,7 @@ const MapCanvas = ({
   const activeStyleUrl = useRef<string | null>(null);
   const initialView = useRef<ViewState>(viewState);
   const initialStyle = useRef<string>(mapStyle.url);
+  const satelliteZoomHandler = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -73,6 +91,10 @@ const MapCanvas = ({
 
     return () => {
       window.removeEventListener('resize', resize);
+      if (satelliteZoomHandler.current && mapRef.current) {
+        mapRef.current.off('zoom', satelliteZoomHandler.current);
+        satelliteZoomHandler.current = null;
+      }
       Object.values(markersRef.current).forEach((marker) => marker.remove());
       markersRef.current = {};
       map.remove();
@@ -160,8 +182,148 @@ const MapCanvas = ({
 
     const coordinates = route.geometry.geometry.coordinates;
     if (coordinates && coordinates.length >= 2) {
-      const bounds = coordinates.reduce((acc, coord) => acc.extend(coord as [number, number]), new maplibregl.LngLatBounds(coordinates[0] as [number, number], coordinates[0] as [number, number]));
+      const bounds = coordinates.reduce(
+        (acc, coord) => acc.extend(coord as [number, number]),
+        new maplibregl.LngLatBounds(coordinates[0] as [number, number], coordinates[0] as [number, number])
+      );
       map.fitBounds(bounds, { padding: 60, duration: 1200 });
+    }
+  };
+
+  const ensureTerrain = () => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    if (!map.getSource(TERRAIN_SOURCE_ID)) {
+      map.addSource(TERRAIN_SOURCE_ID, {
+        type: 'raster-dem',
+        url: TERRAIN_TILESET_URL,
+        tileSize: 256,
+        maxzoom: 14
+      });
+    }
+
+    map.setTerrain({ source: TERRAIN_SOURCE_ID, exaggeration: 1.2 });
+  };
+
+  const removeTerrain = () => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+    map.setTerrain(undefined);
+    if (map.getSource(TERRAIN_SOURCE_ID)) {
+      map.removeSource(TERRAIN_SOURCE_ID);
+    }
+  };
+
+  const ensureSkyLayer = () => {
+    const map = mapRef.current;
+    if (!map || map.getLayer(SKY_LAYER_ID)) {
+      return;
+    }
+
+    map.addLayer({
+      id: SKY_LAYER_ID,
+      type: 'sky',
+      paint: {
+        'sky-type': 'atmosphere',
+        'sky-atmosphere-color': 'rgba(15, 38, 64, 0.85)',
+        'sky-atmosphere-halo-color': '#b3dafe',
+        'sky-atmosphere-sun': [0.0, 0.0],
+        'sky-atmosphere-sun-intensity': 20
+      }
+    });
+  };
+
+  const removeSkyLayer = () => {
+    const map = mapRef.current;
+    if (!map || !map.getLayer(SKY_LAYER_ID)) {
+      return;
+    }
+    map.removeLayer(SKY_LAYER_ID);
+  };
+
+  const calculateSatelliteOpacity = (zoom: number) => {
+    if (zoom <= SATELLITE_FADE_START) {
+      return 0.95;
+    }
+    if (zoom >= SATELLITE_FADE_END) {
+      return 0;
+    }
+    const t = (zoom - SATELLITE_FADE_START) / (SATELLITE_FADE_END - SATELLITE_FADE_START);
+    return Number((0.95 * (1 - t)).toFixed(2));
+  };
+
+  const updateSatelliteOpacity = (zoom: number) => {
+    const map = mapRef.current;
+    if (!map || !map.getLayer(SATELLITE_LAYER_ID)) {
+      return;
+    }
+    const opacity = calculateSatelliteOpacity(zoom);
+    map.setPaintProperty(SATELLITE_LAYER_ID, 'raster-opacity', opacity);
+  };
+
+  const ensureSatelliteLayer = () => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    if (!map.getSource(SATELLITE_SOURCE_ID)) {
+      map.addSource(SATELLITE_SOURCE_ID, {
+        type: 'raster',
+        tiles: [SATELLITE_TILES],
+        tileSize: 256,
+        maxzoom: 8
+      });
+    }
+
+    if (!map.getLayer(SATELLITE_LAYER_ID)) {
+      const beforeId = map.getStyle().layers?.[0]?.id;
+      map.addLayer(
+        {
+          id: SATELLITE_LAYER_ID,
+          type: 'raster',
+          source: SATELLITE_SOURCE_ID,
+          minzoom: 0,
+          maxzoom: 8,
+          paint: {
+            'raster-opacity': 0.95
+          }
+        },
+        beforeId
+      );
+    }
+
+    updateSatelliteOpacity(map.getZoom());
+
+    if (!satelliteZoomHandler.current) {
+      const handler = () => updateSatelliteOpacity(map.getZoom());
+      satelliteZoomHandler.current = handler;
+      map.on('zoom', handler);
+    }
+  };
+
+  const removeSatelliteLayer = () => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    if (satelliteZoomHandler.current) {
+      map.off('zoom', satelliteZoomHandler.current);
+      satelliteZoomHandler.current = null;
+    }
+
+    if (map.getLayer(SATELLITE_LAYER_ID)) {
+      map.removeLayer(SATELLITE_LAYER_ID);
+    }
+
+    if (map.getSource(SATELLITE_SOURCE_ID)) {
+      map.removeSource(SATELLITE_SOURCE_ID);
     }
   };
 
@@ -198,6 +360,27 @@ const MapCanvas = ({
   useEffect(() => {
     withStyleReady(updateRouteLayer);
   }, [route, mapStyle]);
+
+  useEffect(() => {
+    withStyleReady(() => {
+      const map = mapRef.current;
+      if (!map) {
+        return;
+      }
+
+      if (isGlobeView) {
+        map.setProjection({ type: 'globe' });
+        ensureTerrain();
+        ensureSkyLayer();
+        ensureSatelliteLayer();
+      } else {
+        map.setProjection({ type: 'mercator' });
+        removeSkyLayer();
+        removeTerrain();
+        removeSatelliteLayer();
+      }
+    });
+  }, [isGlobeView, mapStyle]);
 
   useEffect(() => {
     const map = mapRef.current;

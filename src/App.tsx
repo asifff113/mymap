@@ -38,7 +38,7 @@ const App = () => {
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [route, setRoute] = useState<RouteSummary | null>(null);
   const [isRouting, setIsRouting] = useState(false);
-  const [isThreeD, setIsThreeD] = useState(false);
+  const [isGlobeView, setIsGlobeView] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const handleViewStateChange = useCallback((next: ViewState) => {
@@ -112,13 +112,14 @@ const App = () => {
     }
   };
 
-  const toggleThreeD = () => {
-    setIsThreeD((prev) => {
+  const toggleGlobeView = () => {
+    setIsGlobeView((prev) => {
       const next = !prev;
       setViewState((state) => ({
         ...state,
-        pitch: next ? 55 : 0,
-        bearing: next ? state.bearing || 25 : 0
+        pitch: next ? Math.max(state.pitch, 45) : 0,
+        bearing: next ? state.bearing || 30 : 0,
+        zoom: next ? Math.max(state.zoom, 3.25) : state.zoom
       }));
       return next;
     });
@@ -151,11 +152,14 @@ const App = () => {
     if (route) {
       return 'Route ready – the map highlights your path.';
     }
+    if (isGlobeView) {
+      return 'Globe mode is on – spin the earth then zoom closer for standard detail.';
+    }
     return 'Pick an origin and destination using the search results to build a route.';
-  }, [route, statusMessage]);
+  }, [route, statusMessage, isGlobeView]);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${isGlobeView ? 'globe-mode' : ''}`}>
       <MapCanvas
         viewState={viewState}
         mapStyle={activeStyle}
@@ -164,6 +168,7 @@ const App = () => {
         destination={destination}
         userLocation={userLocation}
         route={route}
+        isGlobeView={isGlobeView}
         onViewStateChange={handleViewStateChange}
       />
 
@@ -181,10 +186,10 @@ const App = () => {
         <ControlPanel
           styles={MAP_STYLES}
           activeStyleId={activeStyle.id}
-          isThreeD={isThreeD}
+          isGlobeView={isGlobeView}
           onStyleChange={handleStyleChange}
           onLocateMe={handleLocateMe}
-          onToggleThreeD={toggleThreeD}
+          onToggleGlobe={toggleGlobeView}
         />
         <section className="glass-panel" aria-live="polite">
           <p className="status-banner">{infoBanner}</p>

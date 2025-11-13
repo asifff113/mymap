@@ -3,19 +3,19 @@ import type { MapStyleOption } from '../types';
 interface ControlPanelProps {
   styles: MapStyleOption[];
   activeStyleId: string;
-  isThreeD: boolean;
+  isGlobeView: boolean;
   onStyleChange: (styleId: string) => void;
   onLocateMe: () => void;
-  onToggleThreeD: () => void;
+  onToggleGlobe: () => void;
 }
 
 const ControlPanel = ({
   styles,
   activeStyleId,
-  isThreeD,
+  isGlobeView,
   onStyleChange,
   onLocateMe,
-  onToggleThreeD
+  onToggleGlobe
 }: ControlPanelProps) => (
   <section className="glass-panel" aria-label="Map controls">
     <h2 className="panel-title">Map controls</h2>
@@ -36,8 +36,8 @@ const ControlPanel = ({
       <button type="button" className="ghost-btn" onClick={onLocateMe}>
         Locate me
       </button>
-      <button type="button" className="ghost-btn" onClick={onToggleThreeD}>
-        {isThreeD ? 'Exit 3D' : '3D tilt'}
+      <button type="button" className="ghost-btn" onClick={onToggleGlobe}>
+        {isGlobeView ? 'Flat map' : 'Earth globe'}
       </button>
     </div>
   </section>
