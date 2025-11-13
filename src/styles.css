@@ -1,0 +1,247 @@
+@import 'maplibre-gl/dist/maplibre-gl.css';
+
+:root {
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  color: #0f172a;
+  background-color: #f5f7fb;
+  line-height: 1.4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  position: relative;
+  min-height: 100vh;
+}
+
+.map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.panel-stack {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(380px, calc(100vw - 2rem));
+  z-index: 10;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 18px;
+  padding: 1rem;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.15);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.panel-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.search-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-bottom: 0.5rem;
+}
+
+input,
+button,
+select {
+  font: inherit;
+}
+
+.input-field {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #cbd5f5;
+  padding: 0.65rem 0.9rem;
+  background: #fff;
+}
+
+.primary-btn {
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  padding: 0.65rem 0.9rem;
+  background: #2563eb;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.primary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.primary-btn:not(:disabled):hover {
+  background: #1d4ed8;
+}
+
+.action-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.action-row .primary-btn {
+  flex: 2;
+}
+
+.ghost-btn {
+  flex: 1;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  padding: 0.65rem 0.9rem;
+  background: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ghost-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.list-reset {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.result-item {
+  padding: 0.55rem;
+  border-radius: 10px;
+  transition: background 0.15s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.result-item:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.result-item:focus {
+  outline: 2px solid rgba(37, 99, 235, 0.4);
+}
+
+.result-item.muted {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.result-title {
+  font-size: 0.95rem;
+  display: inline-block;
+  margin-bottom: 0.15rem;
+}
+
+.result-description {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.route-meta {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #475569;
+  flex-wrap: wrap;
+}
+
+.toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.toggle-btn {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 999px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: white;
+  cursor: pointer;
+}
+
+.toggle-btn.active {
+  background: rgba(15, 118, 110, 0.15);
+  border-color: rgba(13, 148, 136, 0.5);
+  color: #0f766e;
+}
+
+.chip-btn {
+  border: 1px solid rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.chip-btn:hover {
+  background: rgba(37, 99, 235, 0.15);
+}
+
+.status-banner {
+  font-size: 0.85rem;
+  color: #0f172a;
+  padding: 0.5rem 0.65rem;
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px dashed rgba(15, 23, 42, 0.15);
+}
+
+.status-banner p {
+  margin: 0.15rem 0;
+}
+
+@media (max-width: 768px) {
+  .panel-stack {
+    position: static;
+    width: 100%;
+    padding: 1rem;
+  }
+
+  .map-canvas {
+    position: relative;
+    min-height: 80vh;
+  }
+}
