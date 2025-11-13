@@ -3,7 +3,6 @@ import maplibregl, {
   GeoJSONSource,
   Map as MapLibreMap,
   Marker,
-  NavigationControl,
   ScaleControl
 } from 'maplibre-gl';
 import type { LatLng, MapStyleOption, PlaceResult, RouteSummary, ViewState } from '../types';
@@ -56,6 +55,28 @@ const MapCanvas = ({
       return;
     }
 
+    // Globe interaction options
+    const globeInteractionOptions = {
+      dragPan: {
+        inertia: 0.12, // lower inertia for easier globe spinning
+        deceleration: 1800, // faster stop
+        maxSpeed: 2400 // allow fast spins
+      },
+      dragRotate: true,
+      scrollZoom: {
+        speed: 1.2, // more responsive zoom
+        around: 'center'
+      },
+      doubleClickZoom: true,
+      touchZoomRotate: true,
+      minZoom: 1.2,
+      maxZoom: 14,
+      minPitch: 0,
+      maxPitch: 85,
+      bearingSnap: 0,
+      kinetic: true // enable kinetic rotation
+    };
+
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: initialStyle.current,
@@ -63,12 +84,12 @@ const MapCanvas = ({
       zoom: initialView.current.zoom,
       pitch: initialView.current.pitch,
       bearing: initialView.current.bearing,
-      attributionControl: true
+      attributionControl: true,
+      ...globeInteractionOptions
     });
 
     mapRef.current = map;
     activeStyleUrl.current = mapStyle.url;
-    map.addControl(new NavigationControl({ visualizePitch: true }), 'top-right');
     map.addControl(new ScaleControl({ unit: 'metric' }), 'bottom-left');
 
     const syncViewState = () => {

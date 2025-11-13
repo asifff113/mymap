@@ -3,6 +3,7 @@ import MapCanvas from './components/MapCanvas';
 import SearchPanel from './components/SearchPanel';
 import RoutePlanner from './components/RoutePlanner';
 import ControlPanel from './components/ControlPanel';
+import FloatingControls from './components/FloatingControls';
 import { requestRoute } from './lib/osrm';
 import type {
   LatLng,
@@ -126,9 +127,11 @@ const App = () => {
       const next = !prev;
       setViewState((state) => ({
         ...state,
-        pitch: next ? Math.max(state.pitch, 45) : 0,
-        bearing: next ? state.bearing || 30 : 0,
-        zoom: next ? Math.max(state.zoom, 3.25) : state.zoom
+        // Center globe at the top: latitude 80, pitch 55, bearing 30, zoom 2.7
+        lat: next ? 80 : state.lat,
+        pitch: next ? 55 : 0,
+        bearing: next ? 30 : 0,
+        zoom: next ? 2.7 : state.zoom
       }));
       return next;
     });
@@ -190,6 +193,23 @@ const App = () => {
     }
   }, [origin, destination, route, isRouting, buildRoute]);
 
+  const [panelsMinimized, setPanelsMinimized] = useState(false);
+
+  const zoomDelta = (delta: number) => {
+    setViewState((state) => ({
+      ...state,
+      zoom: Math.min(18, Math.max(1.25, state.zoom + delta))
+    }));
+  };
+
+  const handleResetView = () => {
+    setViewState((state) => ({
+      ...state,
+      pitch: isGlobeView ? Math.max(state.pitch, 45) : 0,
+      bearing: 0
+    }));
+  };
+
   return (
     <div className={`app-shell ${isGlobeView ? 'globe-mode' : ''}`}>
       <MapCanvas
@@ -204,31 +224,58 @@ const App = () => {
         onViewStateChange={handleViewStateChange}
       />
 
-      <div className="panel-stack">
-        <SearchPanel onSelectPlace={handleSelectPlace} onSetWaypoint={handleSetWaypoint} />
-        <RoutePlanner
-          origin={origin}
-          destination={destination}
-          profile={routeProfile}
-          onSwap={handleSwap}
-          onClear={handleClear}
-          onRequestRoute={handleRouteRequest}
-          loading={isRouting}
-          route={route}
-          onProfileChange={handleProfileChange}
-        />
-        <ControlPanel
-          styles={MAP_STYLES}
-          activeStyleId={activeStyle.id}
-          isGlobeView={isGlobeView}
-          onStyleChange={handleStyleChange}
-          onLocateMe={handleLocateMe}
-          onToggleGlobe={toggleGlobeView}
-        />
-        <section className="glass-panel" aria-live="polite">
-          <p className="status-banner">{infoBanner}</p>
-        </section>
+      <div className={`panel-stack${panelsMinimized ? ' minimized' : ''}`}>
+        {panelsMinimized ? (
+          <button
+            className="minimize-btn expand"
+            aria-label="Expand panels"
+            onClick={() => setPanelsMinimized(false)}
+          >
+            ▶
+          </button>
+        ) : (
+          <>
+            <button
+              className="minimize-btn"
+              aria-label="Minimize panels"
+              onClick={() => setPanelsMinimized(true)}
+            >
+              ✕
+            </button>
+            <SearchPanel onSelectPlace={handleSelectPlace} onSetWaypoint={handleSetWaypoint} />
+            <RoutePlanner
+              origin={origin}
+              destination={destination}
+              profile={routeProfile}
+              onSwap={handleSwap}
+              onClear={handleClear}
+              onRequestRoute={handleRouteRequest}
+              loading={isRouting}
+              route={route}
+              onProfileChange={handleProfileChange}
+            />
+            <ControlPanel
+              styles={MAP_STYLES}
+              activeStyleId={activeStyle.id}
+              isGlobeView={isGlobeView}
+              onStyleChange={handleStyleChange}
+              onLocateMe={handleLocateMe}
+              onToggleGlobe={toggleGlobeView}
+            />
+            {!isGlobeView && (
+              <section className="glass-panel" aria-live="polite">
+                <p className="status-banner">{infoBanner}</p>
+              </section>
+            )}
+          </>
+        )}
       </div>
+
+      <FloatingControls
+        onZoomIn={() => zoomDelta(0.8)}
+        onZoomOut={() => zoomDelta(-0.8)}
+        onResetView={handleResetView}
+      />
     </div>
   );
 };
