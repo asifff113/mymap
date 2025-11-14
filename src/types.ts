@@ -71,3 +71,19 @@ export interface BuildingHoverDetails {
   building: BuildingInfo;
   position: ScreenPosition;
 }
+
+export type DrawingMode = 'none' | 'polygon' | 'line' | 'circle';
+
+export interface DrawingShape {
+  id: string;
+  type: 'polygon' | 'line' | 'circle';
+  coordinates: LatLng[];
+  properties: {
+    name?: string;
+    color: string;
+    fillOpacity: number;
+    strokeWidth: number;
+    radius?: number; // for circles, in meters
+  };
+  createdAt: number;
+}

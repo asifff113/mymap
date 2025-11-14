@@ -1001,3 +1001,215 @@ select {
 .export-btn-label {
   font-size: 0.75rem;
 }
+
+/* Drawing Tools */
+.drawing-tools {
+  padding: 1rem;
+  background: var(--color-panel-bg);
+  border-radius: 12px;
+  border: 1px solid var(--color-panel-border);
+}
+
+.mode-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: var(--color-primary);
+  color: white;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.drawing-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.drawing-mode-btn {
+  padding: 0.75rem;
+  background: var(--color-button-bg);
+  border: 1px solid var(--color-button-border);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.drawing-mode-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.drawing-mode-btn.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+.drawing-mode-btn:not(:disabled):not(.active):hover {
+  background: var(--color-button-hover);
+  border-color: var(--color-primary);
+  transform: translateY(-1px);
+}
+
+.mode-icon {
+  font-size: 1.25rem;
+}
+
+.mode-label {
+  font-size: 0.75rem;
+}
+
+.color-picker {
+  margin-top: 1rem;
+}
+
+.color-swatches {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.color-swatch.active {
+  border-color: var(--color-text);
+  box-shadow: 0 0 0 2px var(--color-panel-bg), 0 0 0 4px var(--color-text);
+}
+
+.shapes-list {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-panel-border);
+}
+
+.shapes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.text-btn {
+  background: none;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: underline;
+  transition: opacity 0.2s;
+}
+
+.text-btn:hover {
+  opacity: 0.7;
+}
+
+.text-btn.danger {
+  color: #ef4444;
+}
+
+.shapes-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.shape-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background: var(--color-button-bg);
+  border: 1px solid var(--color-button-border);
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.shape-item:hover {
+  background: var(--color-button-hover);
+}
+
+.shape-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.shape-color-indicator {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.shape-type {
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.shape-points {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+}
+
+.shape-delete-btn {
+  background: none;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.shape-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.drawing-hint {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: var(--color-primary-light);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+:root[data-theme='dark'] .drawing-hint {
+  background: rgba(20, 184, 166, 0.1);
+  color: var(--color-text);
+}

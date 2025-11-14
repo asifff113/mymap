@@ -29,9 +29,12 @@ interface MapCanvasProps {
   measurementPoints: LatLng[];
   animationProgress: number;
   searchResults: PlaceResult[];
+  drawingMode: string;
+  drawingShapes: any[];
+  currentDrawingPoints: LatLng[];
   onViewStateChange: (view: ViewState) => void;
   onBuildingHover: (details: BuildingHoverDetails | null) => void;
-  onMeasurementClick: (coords: LatLng) => void;
+  onMapClick: (coords: LatLng) => void;
   onMapReady?: (canvas: HTMLCanvasElement | null) => void;
 }
 
@@ -67,9 +70,12 @@ const MapCanvas = ({
   measurementPoints,
   animationProgress,
   searchResults,
+  drawingMode,
+  drawingShapes,
+  currentDrawingPoints,
   onViewStateChange,
   onBuildingHover,
-  onMeasurementClick,
+  onMapClick,
   onMapReady
 }: MapCanvasProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -212,12 +218,18 @@ const MapCanvas = ({
     map.on('rotateend', syncViewState);
 
     const handleMapClick = (event: maplibregl.MapMouseEvent) => {
-      if (isMeasuring) {
-        onMeasurementClick({ lat: event.lngLat.lat, lng: event.lngLat.lng });
-      }
+      onMapClick({ lat: event.lngLat.lat, lng: event.lngLat.lng });
     };
 
     map.on('click', handleMapClick);
+
+    const handleDoubleClick = (event: maplibregl.MapMouseEvent) => {
+      if (drawingMode !== 'none' && drawingMode !== 'circle') {
+        event.preventDefault();
+      }
+    };
+
+    map.on('dblclick', handleDoubleClick);
 
     // Notify parent of canvas availability for screenshots
     map.once('load', () => {
@@ -1145,6 +1157,155 @@ const MapCanvas = ({
       }
     }
   }, [measurementPoints]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) {
+      return;
+    }
+
+    const DRAWING_SOURCE_ID = 'drawing-source';
+    const DRAWING_FILL_ID = 'drawing-fill';
+    const DRAWING_LINE_ID = 'drawing-line';
+    const DRAWING_POINTS_ID = 'drawing-points';
+    const CURRENT_DRAWING_ID = 'current-drawing';
+
+    const allShapes = [...drawingShapes];
+    if (currentDrawingPoints.length > 0 && drawingMode !== 'none') {
+      allShapes.push({
+        id: 'current',
+        type: drawingMode,
+        coordinates: currentDrawingPoints,
+        properties: {
+          color: '#3b82f6',
+          fillOpacity: 0.2,
+          strokeWidth: 2
+        }
+      });
+    }
+
+    if (allShapes.length > 0) {
+      const features = allShapes.flatMap((shape) => {
+        if (shape.type === 'circle' && shape.properties.radius) {
+          const center = shape.coordinates[0];
+          const radiusInKm = shape.properties.radius / 1000;
+          const points = 64;
+          const coords = [];
+          for (let i = 0; i <= points; i++) {
+            const angle = (i * 360) / points;
+            const lat = center.lat + (radiusInKm / 111.32) * Math.cos((angle * Math.PI) / 180);
+            const lng =
+              center.lng +
+              ((radiusInKm / 111.32) * Math.sin((angle * Math.PI) / 180)) /
+                Math.cos((center.lat * Math.PI) / 180);
+            coords.push([lng, lat]);
+          }
+          return [
+            {
+              type: 'Feature' as const,
+              properties: { ...shape.properties, shapeId: shape.id },
+              geometry: {
+                type: 'Polygon' as const,
+                coordinates: [coords]
+              }
+            }
+          ];
+        } else if (shape.type === 'polygon') {
+          return [
+            {
+              type: 'Feature' as const,
+              properties: { ...shape.properties, shapeId: shape.id },
+              geometry: {
+                type: 'Polygon' as const,
+                coordinates: [
+                  [...shape.coordinates.map((c) => [c.lng, c.lat]), [shape.coordinates[0].lng, shape.coordinates[0].lat]]
+                ]
+              }
+            }
+          ];
+        } else if (shape.type === 'line') {
+          return [
+            {
+              type: 'Feature' as const,
+              properties: { ...shape.properties, shapeId: shape.id, noFill: true },
+              geometry: {
+                type: 'LineString' as const,
+                coordinates: shape.coordinates.map((c) => [c.lng, c.lat])
+              }
+            }
+          ];
+        }
+        return [];
+      });
+
+      const geoJsonData = {
+        type: 'FeatureCollection' as const,
+        features
+      };
+
+      if (!map.getSource(DRAWING_SOURCE_ID)) {
+        map.addSource(DRAWING_SOURCE_ID, {
+          type: 'geojson',
+          data: geoJsonData
+        });
+      } else {
+        (map.getSource(DRAWING_SOURCE_ID) as maplibregl.GeoJSONSource).setData(geoJsonData);
+      }
+
+      if (!map.getLayer(DRAWING_FILL_ID)) {
+        map.addLayer({
+          id: DRAWING_FILL_ID,
+          type: 'fill',
+          source: DRAWING_SOURCE_ID,
+          filter: ['!', ['get', 'noFill']],
+          paint: {
+            'fill-color': ['get', 'color'],
+            'fill-opacity': ['get', 'fillOpacity']
+          }
+        });
+      }
+
+      if (!map.getLayer(DRAWING_LINE_ID)) {
+        map.addLayer({
+          id: DRAWING_LINE_ID,
+          type: 'line',
+          source: DRAWING_SOURCE_ID,
+          paint: {
+            'line-color': ['get', 'color'],
+            'line-width': ['get', 'strokeWidth']
+          }
+        });
+      }
+
+      if (!map.getLayer(DRAWING_POINTS_ID)) {
+        map.addLayer({
+          id: DRAWING_POINTS_ID,
+          type: 'circle',
+          source: DRAWING_SOURCE_ID,
+          filter: ['==', ['geometry-type'], 'LineString'],
+          paint: {
+            'circle-radius': 4,
+            'circle-color': ['get', 'color'],
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff'
+          }
+        });
+      }
+    } else {
+      if (map.getLayer(DRAWING_POINTS_ID)) {
+        map.removeLayer(DRAWING_POINTS_ID);
+      }
+      if (map.getLayer(DRAWING_LINE_ID)) {
+        map.removeLayer(DRAWING_LINE_ID);
+      }
+      if (map.getLayer(DRAWING_FILL_ID)) {
+        map.removeLayer(DRAWING_FILL_ID);
+      }
+      if (map.getSource(DRAWING_SOURCE_ID)) {
+        map.removeSource(DRAWING_SOURCE_ID);
+      }
+    }
+  }, [drawingShapes, currentDrawingPoints, drawingMode]);
 
   return <div ref={containerRef} className="map-canvas" role="region" aria-label="Interactive world map" />;
 };

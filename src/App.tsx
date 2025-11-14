@@ -10,10 +10,13 @@ import MeasurementTool from './components/MeasurementTool';
 import RouteAnimation from './components/RouteAnimation';
 import GeoLocationControl from './components/GeoLocationControl';
 import ExportControls from './components/ExportControls';
+import DrawingTools from './components/DrawingTools';
 import { requestRoutes } from './lib/osrm';
 import { exportAsGPX, exportAsGeoJSON, printDirections } from './lib/export';
 import type {
   BuildingHoverDetails,
+  DrawingMode,
+  DrawingShape,
   LatLng,
   MapStyleOption,
   PlaceResult,
@@ -104,6 +107,10 @@ const App = () => {
   const [followPosition, setFollowPosition] = useState(true);
   const [geoAccuracy, setGeoAccuracy] = useState<number | null>(null);
   const [mapCanvas, setMapCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [drawingMode, setDrawingMode] = useState<DrawingMode>('none');
+  const [drawingShapes, setDrawingShapes] = useState<DrawingShape[]>([]);
+  const [currentDrawingPoints, setCurrentDrawingPoints] = useState<LatLng[]>([]);
+  const [drawingColor, setDrawingColor] = useState('#3b82f6');
 
   const handleViewStateChange = useCallback((next: ViewState) => {
     setViewState(next);
@@ -581,19 +588,26 @@ const App = () => {
           event.preventDefault();
           setIsMeasuring((prev) => !prev);
           break;
+        case 'enter':
+          if (drawingMode !== 'none' && drawingMode !== 'circle') {
+            event.preventDefault();
+            finishDrawing();
+          }
+          break;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isGlobeView, panelsMinimized]);
+  }, [isGlobeView, panelsMinimized, drawingMode, finishDrawing]);
 
-  const handleMeasurementClick = useCallback((coords: LatLng) => {
-    if (!isMeasuring) {
-      return;
+  const handleMapClick = useCallback((coords: LatLng) => {
+    if (isMeasuring) {
+      setMeasurementPoints((prev) => [...prev, coords]);
+    } else if (drawingMode !== 'none') {
+      handleDrawingClick(coords);
     }
-    setMeasurementPoints((prev) => [...prev, coords]);
-  }, [isMeasuring]);
+  }, [isMeasuring, drawingMode, handleDrawingClick]);
 
   const handleScreenshot = useCallback(() => {
     if (!mapCanvas) {
@@ -638,6 +652,139 @@ const App = () => {
     }
     printDirections(route, origin, destination);
   }, [routes, activeRouteId, origin, destination]);
+
+  const handleDrawingClick = useCallback((coords: LatLng) => {
+    if (drawingMode === 'none') {
+      return;
+    }
+
+    if (drawingMode === 'circle') {
+      if (currentDrawingPoints.length === 0) {
+        setCurrentDrawingPoints([coords]);
+        setStatusMessage('Click again to set radius');
+      } else {
+        const center = currentDrawingPoints[0];
+        const R = 6371000;
+        const dLat = ((coords.lat - center.lat) * Math.PI) / 180;
+        const dLng = ((coords.lng - center.lng) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((center.lat * Math.PI) / 180) *
+            Math.cos((coords.lat * Math.PI) / 180) *
+            Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const radius = R * c;
+
+        const newShape: DrawingShape = {
+          id: `shape-${Date.now()}`,
+          type: 'circle',
+          coordinates: [center],
+          properties: {
+            color: drawingColor,
+            fillOpacity: 0.3,
+            strokeWidth: 2,
+            radius
+          },
+          createdAt: Date.now()
+        };
+        setDrawingShapes((prev) => [...prev, newShape]);
+        setCurrentDrawingPoints([]);
+        setDrawingMode('none');
+        setStatusMessage('Circle created');
+      }
+    } else {
+      setCurrentDrawingPoints((prev) => [...prev, coords]);
+      setStatusMessage(
+        `${currentDrawingPoints.length + 1} points. Double-click or press Enter to finish.`
+      );
+    }
+  }, [drawingMode, currentDrawingPoints, drawingColor]);
+
+  const finishDrawing = useCallback(() => {
+    if (currentDrawingPoints.length < 2) {
+      setStatusMessage('Need at least 2 points');
+      return;
+    }
+
+    const newShape: DrawingShape = {
+      id: `shape-${Date.now()}`,
+      type: drawingMode as 'polygon' | 'line',
+      coordinates: [...currentDrawingPoints],
+      properties: {
+        color: drawingColor,
+        fillOpacity: 0.3,
+        strokeWidth: 2
+      },
+      createdAt: Date.now()
+    };
+
+    setDrawingShapes((prev) => [...prev, newShape]);
+    setCurrentDrawingPoints([]);
+    setDrawingMode('none');
+    setStatusMessage(`${newShape.type} created`);
+  }, [currentDrawingPoints, drawingMode, drawingColor]);
+
+  const handleDrawingModeChange = useCallback((mode: DrawingMode) => {
+    setDrawingMode(mode);
+    setCurrentDrawingPoints([]);
+    if (mode === 'none') {
+      setStatusMessage(null);
+    } else {
+      setStatusMessage(`Click to start drawing ${mode}`);
+    }
+  }, []);
+
+  const handleExportShapes = useCallback(() => {
+    const geojson = {
+      type: 'FeatureCollection',
+      features: drawingShapes.map((shape) => ({
+        type: 'Feature',
+        properties: {
+          type: shape.type,
+          ...shape.properties,
+          createdAt: new Date(shape.createdAt).toISOString()
+        },
+        geometry:
+          shape.type === 'circle'
+            ? {
+                type: 'Point',
+                coordinates: [shape.coordinates[0].lng, shape.coordinates[0].lat]
+              }
+            : {
+                type: shape.type === 'line' ? 'LineString' : 'Polygon',
+                coordinates:
+                  shape.type === 'polygon'
+                    ? [
+                        [...shape.coordinates.map((c) => [c.lng, c.lat]), [shape.coordinates[0].lng, shape.coordinates[0].lat]]
+                      ]
+                    : shape.coordinates.map((c) => [c.lng, c.lat])
+              }
+      }))
+    };
+
+    const blob = new Blob([JSON.stringify(geojson, null, 2)], {
+      type: 'application/json'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `drawings-${new Date().toISOString().slice(0, 10)}.geojson`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setStatusMessage('Drawings exported');
+  }, [drawingShapes]);
+
+  const handleDeleteShape = useCallback((id: string) => {
+    setDrawingShapes((prev) => prev.filter((s) => s.id !== id));
+    setStatusMessage('Shape deleted');
+  }, []);
+
+  const handleClearAllShapes = useCallback(() => {
+    if (window.confirm(`Delete all ${drawingShapes.length} shapes?`)) {
+      setDrawingShapes([]);
+      setStatusMessage('All shapes cleared');
+    }
+  }, [drawingShapes.length]);
 
   const calculateMeasurementDistance = useCallback((points: LatLng[]): number => {
     if (points.length < 2) {
@@ -798,9 +945,12 @@ const App = () => {
         measurementPoints={measurementPoints}
         animationProgress={animationProgress}
         searchResults={searchResults}
+        drawingMode={drawingMode}
+        drawingShapes={drawingShapes}
+        currentDrawingPoints={currentDrawingPoints}
         onViewStateChange={handleViewStateChange}
         onBuildingHover={handleBuildingHover}
-        onMeasurementClick={handleMeasurementClick}
+        onMapClick={handleMapClick}
         onMapReady={setMapCanvas}
       />
 
@@ -884,6 +1034,16 @@ const App = () => {
               onScreenshot={handleScreenshot}
               onExport={handleExportRoute}
               onPrint={handlePrintDirections}
+            />
+            <DrawingTools
+              mode={drawingMode}
+              shapes={drawingShapes}
+              currentColor={drawingColor}
+              onModeChange={handleDrawingModeChange}
+              onColorChange={setDrawingColor}
+              onClearAll={handleClearAllShapes}
+              onDeleteShape={handleDeleteShape}
+              onExportShapes={handleExportShapes}
             />
             {activeRoute && (
               <RouteAnimation
