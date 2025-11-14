@@ -5,12 +5,13 @@ import { searchPlaces } from '../lib/nominatim';
 interface SearchPanelProps {
   onSelectPlace: (place: PlaceResult) => void;
   onSetWaypoint: (place: PlaceResult, role: WaypointRole) => void;
+  onResultsChange?: (results: PlaceResult[]) => void;
 }
 
 const RECENT_KEY = 'mymap_recent_places';
 const CACHE_KEY = 'mymap_search_cache';
 
-const SearchPanel = ({ onSelectPlace, onSetWaypoint }: SearchPanelProps) => {
+const SearchPanel = ({ onSelectPlace, onSetWaypoint, onResultsChange }: SearchPanelProps) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<PlaceResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -70,7 +71,9 @@ const SearchPanel = ({ onSelectPlace, onSetWaypoint }: SearchPanelProps) => {
     }
 
     if (cacheRef.current[normalized]) {
-      setResults(cacheRef.current[normalized]);
+      const cached = cacheRef.current[normalized];
+      setResults(cached);
+      onResultsChange?.(cached);
       setIsLoading(false);
       return;
     }
@@ -78,6 +81,7 @@ const SearchPanel = ({ onSelectPlace, onSetWaypoint }: SearchPanelProps) => {
     try {
       const matches = await searchPlaces(query);
       setResults(matches);
+      onResultsChange?.(matches);
       cacheRef.current[normalized] = matches;
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(CACHE_KEY, JSON.stringify(cacheRef.current));
@@ -86,6 +90,7 @@ const SearchPanel = ({ onSelectPlace, onSetWaypoint }: SearchPanelProps) => {
       const reason = err instanceof Error ? err.message : 'Search failed. Try again in a moment.';
       setError(reason);
       setResults([]);
+      onResultsChange?.([]);
     } finally {
       setIsLoading(false);
     }

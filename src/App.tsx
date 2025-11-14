@@ -96,6 +96,7 @@ const App = () => {
   const [animationProgress, setAnimationProgress] = useState(0);
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [followCamera, setFollowCamera] = useState(true);
+  const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
 
   const handleViewStateChange = useCallback((next: ViewState) => {
     setViewState(next);
@@ -696,6 +697,7 @@ const App = () => {
         isMeasuring={isMeasuring}
         measurementPoints={measurementPoints}
         animationProgress={animationProgress}
+        searchResults={searchResults}
         onViewStateChange={handleViewStateChange}
         onBuildingHover={handleBuildingHover}
         onMeasurementClick={handleMeasurementClick}
@@ -719,7 +721,11 @@ const App = () => {
             >
               ✕
             </button>
-            <SearchPanel onSelectPlace={handleSelectPlace} onSetWaypoint={handleSetWaypoint} />
+            <SearchPanel
+              onSelectPlace={handleSelectPlace}
+              onSetWaypoint={handleSetWaypoint}
+              onResultsChange={setSearchResults}
+            />
             <RoutePlanner
               origin={origin}
               destination={destination}

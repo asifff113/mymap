@@ -27,6 +27,7 @@ interface MapCanvasProps {
   isMeasuring: boolean;
   measurementPoints: LatLng[];
   animationProgress: number;
+  searchResults: PlaceResult[];
   onViewStateChange: (view: ViewState) => void;
   onBuildingHover: (details: BuildingHoverDetails | null) => void;
   onMeasurementClick: (coords: LatLng) => void;
@@ -62,6 +63,7 @@ const MapCanvas = ({
   isMeasuring,
   measurementPoints,
   animationProgress,
+  searchResults,
   onViewStateChange,
   onBuildingHover,
   onMeasurementClick
@@ -739,6 +741,74 @@ const MapCanvas = ({
   useEffect(() => {
     withStyleReady(updateRouteLayer);
   }, [route, mapStyle]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || searchResults.length === 0) {
+      Object.keys(markersRef.current).forEach((key) => {
+        if (key.startsWith('search-') || key.startsWith('cluster-')) {
+          markersRef.current[key].remove();
+          delete markersRef.current[key];
+        }
+      });
+      return;
+    }
+
+    const { clusterPlaces, isCluster } = require('../lib/clustering');
+    const clustered = clusterPlaces(searchResults, viewState.zoom);
+
+    const currentKeys = new Set(Object.keys(markersRef.current).filter((k) => k.startsWith('search-') || k.startsWith('cluster-')));
+
+    clustered.forEach((item) => {
+      if (isCluster(item)) {
+        const key = item.id;
+        currentKeys.delete(key);
+
+        const existing = markersRef.current[key];
+        if (existing) {
+          existing.setLngLat([item.center.lng, item.center.lat]);
+        } else {
+          const el = document.createElement('div');
+          el.className = 'cluster-marker';
+          el.textContent = String(item.count);
+          el.style.width = '36px';
+          el.style.height = '36px';
+          el.style.borderRadius = '50%';
+          el.style.background = '#3b82f6';
+          el.style.color = 'white';
+          el.style.display = 'flex';
+          el.style.alignItems = 'center';
+          el.style.justifyContent = 'center';
+          el.style.fontWeight = '700';
+          el.style.fontSize = '14px';
+          el.style.border = '2px solid white';
+          el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+          el.style.cursor = 'pointer';
+
+          markersRef.current[key] = new maplibregl.Marker({ element: el })
+            .setLngLat([item.center.lng, item.center.lat])
+            .addTo(map);
+        }
+      } else {
+        const key = `search-${item.id}`;
+        currentKeys.delete(key);
+
+        const existing = markersRef.current[key];
+        if (existing) {
+          existing.setLngLat([item.lng, item.lat]);
+        } else {
+          markersRef.current[key] = new maplibregl.Marker({ color: '#6366f1', scale: 0.8 })
+            .setLngLat([item.lng, item.lat])
+            .addTo(map);
+        }
+      }
+    });
+
+    currentKeys.forEach((key) => {
+      markersRef.current[key].remove();
+      delete markersRef.current[key];
+    });
+  }, [searchResults, viewState.zoom, mapStyle]);
 
   useEffect(() => {
     withStyleReady(() => {
