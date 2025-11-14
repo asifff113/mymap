@@ -11,8 +11,10 @@ import RouteAnimation from './components/RouteAnimation';
 import GeoLocationControl from './components/GeoLocationControl';
 import ExportControls from './components/ExportControls';
 import DrawingTools from './components/DrawingTools';
+import OfflineControls from './components/OfflineControls';
 import { requestRoutes } from './lib/osrm';
 import { exportAsGPX, exportAsGeoJSON, printDirections } from './lib/export';
+import { getCacheSize, clearCache, downloadAreaTiles, MAX_CACHE_SIZE } from './lib/tileCache';
 import type {
   BuildingHoverDetails,
   DrawingMode,
@@ -111,6 +113,9 @@ const App = () => {
   const [drawingShapes, setDrawingShapes] = useState<DrawingShape[]>([]);
   const [currentDrawingPoints, setCurrentDrawingPoints] = useState<LatLng[]>([]);
   const [drawingColor, setDrawingColor] = useState('#3b82f6');
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [cacheSize, setCacheSize] = useState(0);
+  const [cacheProgress, setCacheProgress] = useState<number | null>(null);
 
   const handleViewStateChange = useCallback((next: ViewState) => {
     setViewState(next);
@@ -786,6 +791,69 @@ const App = () => {
     }
   }, [drawingShapes.length]);
 
+  const updateCacheSize = useCallback(async () => {
+    const size = await getCacheSize();
+    setCacheSize(size);
+  }, []);
+
+  useEffect(() => {
+    updateCacheSize();
+    const interval = setInterval(updateCacheSize, 5000);
+    return () => clearInterval(interval);
+  }, [updateCacheSize]);
+
+  const handleDownloadArea = useCallback(async () => {
+    if (!viewState.bounds) {
+      setStatusMessage('Map bounds not available');
+      return;
+    }
+
+    setCacheProgress(0);
+    setStatusMessage('Downloading tiles...');
+
+    try {
+      const bounds = {
+        north: viewState.bounds[1],
+        south: viewState.bounds[0],
+        east: viewState.bounds[3],
+        west: viewState.bounds[2]
+      };
+
+      // Extract tile URL from current map style
+      const tileUrl = 'https://demotiles.maplibre.org/tiles/{z}/{x}/{y}.pbf';
+
+      await downloadAreaTiles(bounds, viewState.zoom, tileUrl, (progress) => {
+        setCacheProgress(progress);
+      });
+
+      setCacheProgress(null);
+      await updateCacheSize();
+      setStatusMessage('Area downloaded successfully');
+    } catch (error) {
+      setCacheProgress(null);
+      setStatusMessage('Download failed');
+      console.error('Download error:', error);
+    }
+  }, [viewState, updateCacheSize]);
+
+  const handleClearCache = useCallback(async () => {
+    if (window.confirm('Clear all cached tiles? This cannot be undone.')) {
+      try {
+        await clearCache();
+        await updateCacheSize();
+        setStatusMessage('Cache cleared');
+      } catch (error) {
+        setStatusMessage('Failed to clear cache');
+        console.error('Clear cache error:', error);
+      }
+    }
+  }, [updateCacheSize]);
+
+  const handleToggleOffline = useCallback(() => {
+    setIsOfflineMode((prev) => !prev);
+    setStatusMessage(isOfflineMode ? 'Online mode enabled' : 'Offline mode enabled');
+  }, [isOfflineMode]);
+
   const calculateMeasurementDistance = useCallback((points: LatLng[]): number => {
     if (points.length < 2) {
       return 0;
@@ -1044,6 +1112,15 @@ const App = () => {
               onClearAll={handleClearAllShapes}
               onDeleteShape={handleDeleteShape}
               onExportShapes={handleExportShapes}
+            />
+            <OfflineControls
+              isOfflineMode={isOfflineMode}
+              cacheSize={cacheSize}
+              maxCacheSize={MAX_CACHE_SIZE}
+              cacheProgress={cacheProgress}
+              onToggleOffline={handleToggleOffline}
+              onDownloadArea={handleDownloadArea}
+              onClearCache={handleClearCache}
             />
             {activeRoute && (
               <RouteAnimation

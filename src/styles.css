@@ -1002,6 +1002,111 @@ select {
   font-size: 0.75rem;
 }
 
+/* Offline Controls */
+.offline-controls {
+  padding: 1rem;
+  background: var(--color-panel-bg);
+  border-radius: 12px;
+  border: 1px solid var(--color-panel-border);
+}
+
+.cache-info {
+  margin-top: 0.75rem;
+}
+
+.cache-stats {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.cache-label {
+  color: var(--color-text-muted);
+}
+
+.cache-value {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.cache-bar {
+  height: 6px;
+  background: var(--color-button-bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cache-bar-fill {
+  height: 100%;
+  background: var(--color-primary);
+  transition: width 0.3s;
+}
+
+.download-progress {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: var(--color-primary-light);
+  border-radius: 8px;
+}
+
+.progress-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.progress-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--color-primary);
+  transition: width 0.3s;
+}
+
+.progress-text {
+  font-size: 0.75rem;
+  text-align: right;
+  font-weight: 600;
+}
+
+.offline-actions {
+  margin-top: 1rem;
+}
+
+.ghost-btn.danger {
+  color: #ef4444;
+  border-color: #ef4444;
+}
+
+.ghost-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.offline-hint {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: var(--color-primary-light);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+:root[data-theme='dark'] .offline-hint {
+  background: rgba(20, 184, 166, 0.1);
+}
+
+:root[data-theme='dark'] .download-progress {
+  background: rgba(20, 184, 166, 0.15);
+}
+
 /* Drawing Tools */
 .drawing-tools {
   padding: 1rem;
