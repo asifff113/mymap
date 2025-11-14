@@ -5,8 +5,11 @@ import RoutePlanner from './components/RoutePlanner';
 import ControlPanel from './components/ControlPanel';
 import FloatingControls from './components/FloatingControls';
 import Minimap from './components/Minimap';
-import { requestRoute } from './lib/osrm';
+import BuildingInfoPopup from './components/BuildingInfoPopup';
+import MeasurementTool from './components/MeasurementTool';
+import { requestRoutes } from './lib/osrm';
 import type {
+  BuildingHoverDetails,
   LatLng,
   MapStyleOption,
   PlaceResult,
@@ -39,6 +42,32 @@ const INITIAL_VIEW: ViewState = {
   bearing: 0
 };
 
+const TOUR_STOPS: Array<{
+  id: string;
+  label: string;
+  description: string;
+  view: Pick<ViewState, 'lat' | 'lng' | 'zoom' | 'pitch' | 'bearing'>;
+}> = [
+  {
+    id: 'midtown',
+    label: 'Midtown NYC',
+    description: 'Classic skyscraper canyon flyover.',
+    view: { lat: 40.754, lng: -73.984, zoom: 16.2, pitch: 72, bearing: 28 }
+  },
+  {
+    id: 'tokyo',
+    label: 'Tokyo Skyline',
+    description: 'Sweep across Shinjuku towers.',
+    view: { lat: 35.6938, lng: 139.7034, zoom: 16.5, pitch: 75, bearing: 120 }
+  },
+  {
+    id: 'andes',
+    label: 'Andes Ridge',
+    description: 'Tilt across the Peruvian Andes with rich terrain.',
+    view: { lat: -13.532, lng: -71.972, zoom: 10.8, pitch: 65, bearing: 160 }
+  }
+];
+
 const App = () => {
   const [viewState, setViewState] = useState<ViewState>(INITIAL_VIEW);
   const [activeStyle, setActiveStyle] = useState<MapStyleOption>(MAP_STYLES[0]);
@@ -46,7 +75,8 @@ const App = () => {
   const [origin, setOrigin] = useState<PlaceResult | null>(null);
   const [destination, setDestination] = useState<PlaceResult | null>(null);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
-  const [route, setRoute] = useState<RouteSummary | null>(null);
+  const [routes, setRoutes] = useState<RouteSummary[]>([]);
+  const [activeRouteId, setActiveRouteId] = useState<string | null>(null);
   const [routeProfile, setRouteProfile] = useState<RouteProfile>('driving');
   const [isRouting, setIsRouting] = useState(false);
   const [isGlobeView, setIsGlobeView] = useState(false);
@@ -54,27 +84,32 @@ const App = () => {
   const [buildingScale, setBuildingScale] = useState(1.2);
   const [timeOfDay, setTimeOfDay] = useState<'auto' | 'day' | 'night'>('auto');
   const [shadowIntensity, setShadowIntensity] = useState(0.7);
-  const [hoveredBuilding, setHoveredBuilding] = useState<any>(null);
+  const [hoveredBuilding, setHoveredBuilding] = useState<BuildingHoverDetails | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [isMeasuring, setIsMeasuring] = useState(false);
+  const [measurementPoints, setMeasurementPoints] = useState<LatLng[]>([]);
+  const [measurementDistance, setMeasurementDistance] = useState(0);
 
   const handleViewStateChange = useCallback((next: ViewState) => {
     setViewState(next);
   }, []);
 
-const flyToPlace = (place: PlaceResult) => {
-  setViewState((state) => ({
-    ...state,
-    lat: place.lat,
-    lng: place.lng,
-    zoom: Math.max(state.zoom, showBuildings ? 15.5 : 12),
-    pitch: showBuildings ? Math.max(state.pitch, 70) : Math.max(state.pitch, 48),
-    bearing: showBuildings ? ((state.bearing + 35) % 360) : state.bearing,
-    transition: {
-      duration: showBuildings ? 2400 : 1400,
-      curve: showBuildings ? 1.6 : 1.3
-    }
-  }));
-};
+  const flyToPlace = (place: PlaceResult) => {
+    setViewState((state) => ({
+      ...state,
+      lat: place.lat,
+      lng: place.lng,
+      zoom: Math.max(state.zoom, showBuildings ? 15.5 : 12),
+      pitch: showBuildings ? Math.max(state.pitch, 70) : Math.max(state.pitch, 48),
+      bearing: showBuildings ? (state.bearing + 35) % 360 : state.bearing,
+      transition: {
+        duration: showBuildings ? 2400 : 1400,
+        curve: showBuildings ? 1.6 : 1.3
+      }
+    }));
+  };
 
   const handleSelectPlace = (place: PlaceResult) => {
     setSelectedPlace(place);
@@ -89,20 +124,23 @@ const flyToPlace = (place: PlaceResult) => {
     } else {
       setDestination(place);
     }
-    setRoute(null);
+    setRoutes([]);
+    setActiveRouteId(null);
     setStatusMessage(null);
   };
 
   const handleSwap = () => {
     setOrigin(destination);
     setDestination(origin);
-    setRoute(null);
+    setRoutes([]);
+    setActiveRouteId(null);
   };
 
   const handleClear = () => {
     setOrigin(null);
     setDestination(null);
-    setRoute(null);
+    setRoutes([]);
+    setActiveRouteId(null);
   };
 
   const handleLocateMe = () => {
@@ -191,6 +229,24 @@ const flyToPlace = (place: PlaceResult) => {
     setShadowIntensity(value);
   };
 
+  const placeFromParams = (params: URLSearchParams, prefix: 'o' | 'd'): PlaceResult | null => {
+    const lat = Number(params.get(`${prefix}Lat`));
+    const lng = Number(params.get(`${prefix}Lng`));
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return null;
+    }
+    const name = params.get(`${prefix}Name`) || (prefix === 'o' ? 'Shared origin' : 'Shared destination');
+    const description = params.get(`${prefix}Desc`) || 'Shared waypoint';
+    const id = prefix === 'o' ? 'shared-origin' : 'shared-destination';
+    return {
+      id,
+      name,
+      description,
+      lat,
+      lng
+    };
+  };
+
   const setCameraPreset = (preset: 'topDown' | 'overview' | 'street') => {
     setViewState((state) => {
       const presets = {
@@ -206,9 +262,34 @@ const flyToPlace = (place: PlaceResult) => {
     });
   };
 
-  const handleBuildingHover = (building: any) => {
-    setHoveredBuilding(building);
+  const handleTourSelect = (tourId: string) => {
+    const stop = TOUR_STOPS.find((tour) => tour.id === tourId);
+    if (!stop) {
+      return;
+    }
+    if (!isGlobeView) {
+      setIsGlobeView(true);
+    }
+    setViewState((state) => ({
+      ...state,
+      ...stop.view,
+      transition: { duration: 2600, curve: 1.55 }
+    }));
+    setStatusMessage(stop.description);
   };
+
+  const handleMinimapPan = (coords: LatLng) => {
+    setViewState((state) => ({
+      ...state,
+      lat: coords.lat,
+      lng: coords.lng,
+      transition: { duration: 700, curve: 1.1 }
+    }));
+  };
+
+  const handleBuildingHover = useCallback((details: BuildingHoverDetails | null) => {
+    setHoveredBuilding(details);
+  }, []);
 
   const buildRoute = useCallback(
     async (profileOverride?: RouteProfile) => {
@@ -221,12 +302,14 @@ const flyToPlace = (place: PlaceResult) => {
       setStatusMessage(null);
 
       try {
-        const nextRoute = await requestRoute(origin, destination, targetProfile);
-        setRoute(nextRoute);
+        const nextRoutes = await requestRoutes(origin, destination, targetProfile);
+        setRoutes(nextRoutes);
+        setActiveRouteId(nextRoutes[0]?.id ?? null);
       } catch (error) {
         const reason = error instanceof Error ? error.message : 'We could not compute a route right now.';
         setStatusMessage(reason);
-        setRoute(null);
+        setRoutes([]);
+        setActiveRouteId(null);
       } finally {
         setIsRouting(false);
       }
@@ -235,21 +318,149 @@ const flyToPlace = (place: PlaceResult) => {
   );
 
   const handleRouteRequest = () => {
+    setActiveRouteId(null);
+    setRoutes([]);
     void buildRoute();
   };
 
   const handleProfileChange = (profile: RouteProfile) => {
     setRouteProfile(profile);
     if (origin && destination) {
+      setActiveRouteId(null);
+      setRoutes([]);
       void buildRoute(profile);
     }
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setIsInitialized(true);
+      return;
+    }
+
+    const rawHash = window.location.hash.startsWith('#')
+      ? window.location.hash.slice(1)
+      : window.location.hash;
+    if (!rawHash) {
+      setIsInitialized(true);
+      return;
+    }
+
+    const params = new URLSearchParams(rawHash);
+    const lat = Number(params.get('lat'));
+    const lng = Number(params.get('lng'));
+    const zoom = Number(params.get('zoom'));
+    const pitch = Number(params.get('pitch'));
+    const bearing = Number(params.get('bearing'));
+    setViewState((state) => ({
+      ...state,
+      lat: Number.isFinite(lat) ? lat : state.lat,
+      lng: Number.isFinite(lng) ? lng : state.lng,
+      zoom: Number.isFinite(zoom) ? zoom : state.zoom,
+      pitch: Number.isFinite(pitch) ? pitch : state.pitch,
+      bearing: Number.isFinite(bearing) ? bearing : state.bearing
+    }));
+
+    const styleId = params.get('style');
+    if (styleId) {
+      const style = MAP_STYLES.find((option) => option.id === styleId);
+      if (style) {
+        setActiveStyle(style);
+      }
+    }
+
+    const incomingProfile = params.get('profile');
+    if (incomingProfile === 'cycling' || incomingProfile === 'walking' || incomingProfile === 'driving') {
+      setRouteProfile(incomingProfile);
+    }
+
+    setIsGlobeView(params.get('globe') === '1');
+    setShowBuildings(params.get('buildings') === '1');
+
+    const sharedOrigin = placeFromParams(params, 'o');
+    const sharedDestination = placeFromParams(params, 'd');
+    if (sharedOrigin) {
+      setOrigin(sharedOrigin);
+    }
+    if (sharedDestination) {
+      setDestination(sharedDestination);
+    }
+
+    setIsInitialized(true);
+  }, []);
+
+  const buildShareParams = useCallback(() => {
+    const params = new URLSearchParams();
+    params.set('lat', viewState.lat.toFixed(5));
+    params.set('lng', viewState.lng.toFixed(5));
+    params.set('zoom', viewState.zoom.toFixed(2));
+    params.set('pitch', viewState.pitch.toFixed(1));
+    params.set('bearing', viewState.bearing.toFixed(1));
+    params.set('style', activeStyle.id);
+    params.set('globe', isGlobeView ? '1' : '0');
+    params.set('buildings', showBuildings ? '1' : '0');
+    params.set('profile', routeProfile);
+    if (origin) {
+      params.set('oLat', origin.lat.toFixed(5));
+      params.set('oLng', origin.lng.toFixed(5));
+      params.set('oName', origin.name);
+      params.set('oDesc', origin.description);
+    }
+    if (destination) {
+      params.set('dLat', destination.lat.toFixed(5));
+      params.set('dLng', destination.lng.toFixed(5));
+      params.set('dName', destination.name);
+      params.set('dDesc', destination.description);
+    }
+    return params;
+  }, [viewState, activeStyle.id, isGlobeView, showBuildings, routeProfile, origin, destination]);
+
+  useEffect(() => {
+    if (!isInitialized || typeof window === 'undefined') {
+      return;
+    }
+    const params = buildShareParams();
+    window.history.replaceState({}, '', `${window.location.pathname}#${params.toString()}`);
+  }, [buildShareParams, isInitialized]);
+
+  const shareUrl = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return '';
+    }
+    const params = buildShareParams();
+    return `${window.location.origin}${window.location.pathname}#${params.toString()}`;
+  }, [buildShareParams]);
+
+  const handleCopyShareLink = async () => {
+    if (!shareUrl) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareLinkCopied(true);
+    } catch {
+      setShareLinkCopied(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!shareLinkCopied || typeof window === 'undefined') {
+      return;
+    }
+    const timer = window.setTimeout(() => setShareLinkCopied(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [shareLinkCopied]);
+
+  const activeRoute = useMemo(
+    () => routes.find((candidate) => candidate.id === activeRouteId) ?? null,
+    [routes, activeRouteId]
+  );
 
   const infoBanner = useMemo(() => {
     if (statusMessage) {
       return statusMessage;
     }
-    if (route) {
+    if (activeRoute) {
       const profileLabel =
         routeProfile === 'cycling' ? 'Cycling' : routeProfile === 'walking' ? 'Walking' : 'Driving';
       return `${profileLabel} route ready – the highlighted path follows your selections.`;
@@ -258,13 +469,13 @@ const flyToPlace = (place: PlaceResult) => {
       return 'Globe mode is on – spin the earth then zoom closer for standard detail.';
     }
     return 'Pick an origin and destination using the search results to build a route.';
-  }, [route, statusMessage, isGlobeView, routeProfile]);
+  }, [statusMessage, activeRoute, isGlobeView, routeProfile]);
 
   useEffect(() => {
-    if (origin && destination && !route && !isRouting) {
+    if (origin && destination && !routes.length && !isRouting) {
       void buildRoute();
     }
-  }, [origin, destination, route, isRouting, buildRoute]);
+  }, [origin, destination, routes.length, isRouting, buildRoute]);
 
   const [panelsMinimized, setPanelsMinimized] = useState(false);
 
@@ -285,6 +496,127 @@ const flyToPlace = (place: PlaceResult) => {
     }));
   };
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      switch (event.key.toLowerCase()) {
+        case 'arrowup':
+          event.preventDefault();
+          setViewState((state) => ({
+            ...state,
+            lat: Math.min(85, state.lat + 0.5),
+            transition: { duration: 300 }
+          }));
+          break;
+        case 'arrowdown':
+          event.preventDefault();
+          setViewState((state) => ({
+            ...state,
+            lat: Math.max(-85, state.lat - 0.5),
+            transition: { duration: 300 }
+          }));
+          break;
+        case 'arrowleft':
+          event.preventDefault();
+          setViewState((state) => ({
+            ...state,
+            lng: state.lng - 0.5,
+            transition: { duration: 300 }
+          }));
+          break;
+        case 'arrowright':
+          event.preventDefault();
+          setViewState((state) => ({
+            ...state,
+            lng: state.lng + 0.5,
+            transition: { duration: 300 }
+          }));
+          break;
+        case '+':
+        case '=':
+          event.preventDefault();
+          zoomDelta(0.8);
+          break;
+        case '-':
+        case '_':
+          event.preventDefault();
+          zoomDelta(-0.8);
+          break;
+        case 'g':
+          event.preventDefault();
+          toggleGlobeView();
+          break;
+        case 'b':
+          event.preventDefault();
+          toggleBuildings();
+          break;
+        case 'escape':
+          event.preventDefault();
+          if (!panelsMinimized) {
+            setPanelsMinimized(true);
+          }
+          break;
+        case 'r':
+          event.preventDefault();
+          handleResetView();
+          break;
+        case 'm':
+          event.preventDefault();
+          setIsMeasuring((prev) => !prev);
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isGlobeView, panelsMinimized]);
+
+  const handleMeasurementClick = useCallback((coords: LatLng) => {
+    if (!isMeasuring) {
+      return;
+    }
+    setMeasurementPoints((prev) => [...prev, coords]);
+  }, [isMeasuring]);
+
+  const calculateMeasurementDistance = useCallback((points: LatLng[]): number => {
+    if (points.length < 2) {
+      return 0;
+    }
+    let total = 0;
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1];
+      const curr = points[i];
+      const R = 6371000;
+      const dLat = ((curr.lat - prev.lat) * Math.PI) / 180;
+      const dLng = ((curr.lng - prev.lng) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((prev.lat * Math.PI) / 180) *
+          Math.cos((curr.lat * Math.PI) / 180) *
+          Math.sin(dLng / 2) *
+          Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      total += R * c;
+    }
+    return total;
+  }, []);
+
+  useEffect(() => {
+    const distance = calculateMeasurementDistance(measurementPoints);
+    setMeasurementDistance(distance);
+  }, [measurementPoints, calculateMeasurementDistance]);
+
+  useEffect(() => {
+    if (!isMeasuring) {
+      setMeasurementPoints([]);
+      setMeasurementDistance(0);
+    }
+  }, [isMeasuring]);
+
   return (
     <div className={`app-shell ${isGlobeView ? 'globe-mode' : ''}`}>
       <MapCanvas
@@ -294,14 +626,17 @@ const flyToPlace = (place: PlaceResult) => {
         origin={origin}
         destination={destination}
         userLocation={userLocation}
-        route={route}
+        route={activeRoute}
         isGlobeView={isGlobeView}
         showBuildings={showBuildings}
         buildingScale={buildingScale}
         timeOfDay={timeOfDay}
         shadowIntensity={shadowIntensity}
+        isMeasuring={isMeasuring}
+        measurementPoints={measurementPoints}
         onViewStateChange={handleViewStateChange}
         onBuildingHover={handleBuildingHover}
+        onMeasurementClick={handleMeasurementClick}
       />
 
       <div className={`panel-stack${panelsMinimized ? ' minimized' : ''}`}>
@@ -331,8 +666,13 @@ const flyToPlace = (place: PlaceResult) => {
               onClear={handleClear}
               onRequestRoute={handleRouteRequest}
               loading={isRouting}
-              route={route}
+              routes={routes}
+              activeRouteId={activeRoute?.id ?? null}
               onProfileChange={handleProfileChange}
+              onSelectRoute={setActiveRouteId}
+              shareUrl={shareUrl}
+              onCopyShareLink={handleCopyShareLink}
+              shareLinkCopied={shareLinkCopied}
             />
             <ControlPanel
               styles={MAP_STYLES}
@@ -350,6 +690,18 @@ const flyToPlace = (place: PlaceResult) => {
               onTimeOfDayChange={handleTimeOfDayChange}
               onShadowIntensityChange={handleShadowIntensityChange}
               onCameraPreset={setCameraPreset}
+              tourStops={TOUR_STOPS}
+              onSelectTourStop={handleTourSelect}
+            />
+            <MeasurementTool
+              isActive={isMeasuring}
+              points={measurementPoints}
+              totalDistance={measurementDistance}
+              onToggle={() => setIsMeasuring((prev) => !prev)}
+              onClear={() => {
+                setMeasurementPoints([]);
+                setMeasurementDistance(0);
+              }}
             />
             {!isGlobeView && (
               <section className="glass-panel" aria-live="polite">
@@ -372,8 +724,15 @@ const flyToPlace = (place: PlaceResult) => {
           bearing={viewState.bearing}
           zoom={viewState.zoom}
           show3D={showBuildings}
+          bounds={viewState.bounds}
+          onPanTo={handleMinimapPan}
         />
       )}
+
+      <BuildingInfoPopup
+        building={hoveredBuilding?.building ?? null}
+        position={hoveredBuilding?.position ?? { x: 0, y: 0 }}
+      />
     </div>
   );
 };

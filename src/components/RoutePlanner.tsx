@@ -8,8 +8,13 @@ interface RoutePlannerProps {
   onClear: () => void;
   onRequestRoute: () => void;
   loading: boolean;
-  route: RouteSummary | null;
+  routes: RouteSummary[];
+  activeRouteId: string | null;
   onProfileChange: (profile: RouteProfile) => void;
+  onSelectRoute: (routeId: string) => void;
+  shareUrl: string;
+  onCopyShareLink: () => void;
+  shareLinkCopied: boolean;
 }
 
 const getLabel = (place: PlaceResult | null) => place?.name ?? 'Not set';
@@ -38,8 +43,13 @@ const RoutePlanner = ({
   onClear,
   onRequestRoute,
   loading,
-  route,
-  onProfileChange
+  routes,
+  activeRouteId,
+  onProfileChange,
+  onSelectRoute,
+  shareUrl,
+  onCopyShareLink,
+  shareLinkCopied
 }: RoutePlannerProps) => {
   const canRoute = Boolean(origin && destination) && !loading;
   const profileLabel =
@@ -49,6 +59,8 @@ const RoutePlanner = ({
     { id: 'cycling', label: 'Bike' },
     { id: 'walking', label: 'Walk' }
   ];
+  const activeRoute = routes.find((candidate) => candidate.id === activeRouteId) ?? routes[0];
+  const steps = activeRoute?.steps ?? [];
 
   return (
     <section className="glass-panel" aria-label="Route planner">
@@ -85,11 +97,58 @@ const RoutePlanner = ({
         </button>
       </div>
 
-      {route && (
-        <div className="route-meta" style={{ marginTop: '0.75rem' }}>
-          <span className="badge">{formatDistance(route.distance)}</span>
-          <span className="badge">{formatDuration(route.duration)}</span>
+      {routes.length > 0 && (
+        <div className="route-option-grid">
+          {routes.map((option, index) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`route-option ${activeRoute?.id === option.id ? 'active' : ''}`}
+              onClick={() => onSelectRoute(option.id)}
+            >
+              <div className="route-option-title">
+                Route {index + 1} {option.isAlternate ? '(alt)' : ''}
+              </div>
+              <div className="route-option-meta">
+                {formatDistance(option.distance)} · {formatDuration(option.duration)}
+              </div>
+            </button>
+          ))}
         </div>
+      )}
+
+      {activeRoute && (
+        <div className="route-meta" style={{ marginTop: '0.75rem' }}>
+          <span className="badge">{formatDistance(activeRoute.distance)}</span>
+          <span className="badge">{formatDuration(activeRoute.duration)}</span>
+        </div>
+      )}
+
+      {steps.length > 0 && (
+        <div className="route-steps-container">
+          <p className="muted-subcopy">Next maneuvers</p>
+          <ol className="route-steps">
+            {steps.slice(0, 6).map((step, index) => (
+              <li key={`${step.instruction}-${index}`}>
+                <span className="step-instruction">{step.instruction}</span>
+                <span className="step-meta">
+                  {formatDistance(step.distance)} · {formatDuration(step.duration)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {shareUrl && (
+        <button
+          type="button"
+          className="ghost-btn"
+          style={{ marginTop: '0.5rem', width: '100%' }}
+          onClick={onCopyShareLink}
+        >
+          {shareLinkCopied ? 'Link copied!' : 'Copy share link'}
+        </button>
       )}
     </section>
   );

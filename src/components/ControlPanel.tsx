@@ -1,3 +1,4 @@
+import ThemeToggle from './ThemeToggle';
 import type { MapStyleOption } from '../types';
 
 interface ControlPanelProps {
@@ -16,6 +17,12 @@ interface ControlPanelProps {
   onTimeOfDayChange: (mode: 'auto' | 'day' | 'night') => void;
   onShadowIntensityChange: (value: number) => void;
   onCameraPreset: (preset: 'topDown' | 'overview' | 'street') => void;
+  tourStops: Array<{
+    id: string;
+    label: string;
+    description: string;
+  }>;
+  onSelectTourStop: (stopId: string) => void;
 }
 
 const ControlPanel = ({
@@ -33,7 +40,9 @@ const ControlPanel = ({
   onBuildingScaleChange,
   onTimeOfDayChange,
   onShadowIntensityChange,
-  onCameraPreset
+  onCameraPreset,
+  tourStops,
+  onSelectTourStop
 }: ControlPanelProps) => (
   <section className="glass-panel" aria-label="Map controls">
     <h2 className="panel-title">Map controls</h2>
@@ -57,6 +66,10 @@ const ControlPanel = ({
       <button type="button" className="ghost-btn" onClick={onToggleGlobe}>
         {isGlobeView ? 'Flat map' : 'Earth globe'}
       </button>
+    </div>
+
+    <div className="action-row" style={{ marginTop: '0.4rem' }}>
+      <ThemeToggle />
     </div>
 
     <div className="action-row" style={{ marginTop: '0.4rem' }}>
@@ -154,6 +167,24 @@ const ControlPanel = ({
         </div>
       </>
     )}
+
+    <div className="control-group" style={{ marginTop: '0.75rem' }}>
+      <label className="control-label">Guided tours</label>
+      <p className="muted-subcopy">Fly to curated scenes with a single tap.</p>
+      <div className="tour-grid">
+        {tourStops.map((stop) => (
+          <button
+            key={stop.id}
+            type="button"
+            className="tour-btn"
+            onClick={() => onSelectTourStop(stop.id)}
+          >
+            <span>{stop.label}</span>
+            <small>{stop.description}</small>
+          </button>
+        ))}
+      </div>
+    </div>
   </section>
 );
 

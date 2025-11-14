@@ -1,11 +1,15 @@
 import { useEffect, useRef } from 'react';
-import maplibregl, {
-  GeoJSONSource,
-  Map as MapLibreMap,
-  Marker,
-  ScaleControl
-} from 'maplibre-gl';
-import type { LatLng, MapStyleOption, PlaceResult, RouteSummary, ViewState } from '../types';
+import maplibregl, { GeoJSONSource, Map as MapLibreMap, Marker, ScaleControl } from 'maplibre-gl';
+import type {
+  BoundingBox,
+  BuildingHoverDetails,
+  BuildingInfo,
+  LatLng,
+  MapStyleOption,
+  PlaceResult,
+  RouteSummary,
+  ViewState
+} from '../types';
 
 interface MapCanvasProps {
   viewState: ViewState;
@@ -20,8 +24,11 @@ interface MapCanvasProps {
   buildingScale: number;
   timeOfDay: 'auto' | 'day' | 'night';
   shadowIntensity: number;
+  isMeasuring: boolean;
+  measurementPoints: LatLng[];
   onViewStateChange: (view: ViewState) => void;
-  onBuildingHover: (building: any) => void;
+  onBuildingHover: (details: BuildingHoverDetails | null) => void;
+  onMeasurementClick: (coords: LatLng) => void;
 }
 
 const ROUTE_SOURCE_ID = 'route-source';
@@ -51,8 +58,11 @@ const MapCanvas = ({
   buildingScale,
   timeOfDay,
   shadowIntensity,
+  isMeasuring,
+  measurementPoints,
   onViewStateChange,
-  onBuildingHover
+  onBuildingHover,
+  onMeasurementClick
 }: MapCanvasProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -63,15 +73,74 @@ const MapCanvas = ({
   const satelliteZoomHandler = useRef<(() => void) | null>(null);
   const sunAnimationRef = useRef<number | null>(null);
   const hoveredBuildingRef = useRef<{ source: string; sourceLayer?: string; id: string | number } | null>(null);
+  const lastHoverDetails = useRef<BuildingHoverDetails | null>(null);
+
+  const emitBuildingHover = (details: BuildingHoverDetails | null) => {
+    const previous = lastHoverDetails.current;
+    if (
+      previous &&
+      details &&
+      previous.building.name === details.building.name &&
+      previous.building.height === details.building.height &&
+      previous.position.x === details.position.x &&
+      previous.position.y === details.position.y
+    ) {
+      return;
+    }
+    lastHoverDetails.current = details;
+    onBuildingHover(details);
+  };
+
+  const toBoundingBox = (bounds: maplibregl.LngLatBounds): BoundingBox => [
+    bounds.getSouth(),
+    bounds.getNorth(),
+    bounds.getWest(),
+    bounds.getEast()
+  ];
+
+  const parseNumberValue = (value: unknown): number | undefined => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : undefined;
+  };
+
+  const extractBuildingInfo = (feature: maplibregl.MapboxGeoJSONFeature): BuildingInfo | null => {
+    if (!feature?.properties) {
+      return null;
+    }
+    const properties = feature.properties as Record<string, unknown>;
+    const address =
+      (properties['addr:full'] as string) ??
+      [properties['addr:housenumber'], properties['addr:street']]
+        .filter(Boolean)
+        .join(' ')
+        .trim() ||
+      (properties['addr:city'] as string);
+
+    const info: BuildingInfo = {
+      name: (properties.name as string) ?? (properties['addr:housename'] as string),
+      height: parseNumberValue(properties.render_height ?? properties.height),
+      levels: parseNumberValue(properties['building:levels']),
+      type: (properties.type as string) ?? (properties['building'] as string),
+      address
+    };
+
+    if (!info.name && !info.height && !info.levels && !info.type && !info.address) {
+      return null;
+    }
+
+    return info;
+  };
 
   const clearHighlightedBuilding = () => {
     const map = mapRef.current;
     if (!map || !hoveredBuildingRef.current) {
+      emitBuildingHover(null);
       return;
     }
     const target = hoveredBuildingRef.current;
     map.setFeatureState({ source: target.source, sourceLayer: target.sourceLayer, id: target.id }, { highlight: false });
     hoveredBuildingRef.current = null;
+    emitBuildingHover(null);
   };
 
   useEffect(() => {
@@ -119,18 +188,28 @@ const MapCanvas = ({
 
     const syncViewState = () => {
       const center = map.getCenter();
+      const bounds = map.getBounds();
       onViewStateChange({
         lat: center.lat,
         lng: center.lng,
         zoom: map.getZoom(),
         pitch: map.getPitch(),
-        bearing: map.getBearing()
+        bearing: map.getBearing(),
+        bounds: toBoundingBox(bounds)
       });
     };
 
     map.on('moveend', syncViewState);
     map.on('pitchend', syncViewState);
     map.on('rotateend', syncViewState);
+
+    const handleMapClick = (event: maplibregl.MapMouseEvent) => {
+      if (isMeasuring) {
+        onMeasurementClick({ lat: event.lngLat.lat, lng: event.lngLat.lng });
+      }
+    };
+
+    map.on('click', handleMapClick);
 
     const resize = () => map.resize();
     window.addEventListener('resize', resize);
@@ -728,9 +807,21 @@ const MapCanvas = ({
         { source: target.source, sourceLayer: target.sourceLayer, id: target.id },
         { highlight: true }
       );
+      const info = extractBuildingInfo(feature);
+      if (info) {
+        emitBuildingHover({
+          building: info,
+          position: { x: event.point.x, y: event.point.y }
+        });
+      } else {
+        emitBuildingHover(null);
+      }
     };
 
-    const handleLeave = () => clearHighlightedBuilding();
+    const handleLeave = () => {
+      clearHighlightedBuilding();
+      emitBuildingHover(null);
+    };
 
     let listenersBound = false;
 
@@ -764,8 +855,87 @@ const MapCanvas = ({
         map.off('styledata', waitForLayer);
       }
       clearHighlightedBuilding();
+      emitBuildingHover(null);
     };
-  }, [showBuildings]);
+  }, [showBuildings, onBuildingHover]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) {
+      return;
+    }
+
+    const MEASUREMENT_SOURCE_ID = 'measurement-source';
+    const MEASUREMENT_LINE_ID = 'measurement-line';
+    const MEASUREMENT_POINTS_ID = 'measurement-points';
+
+    if (measurementPoints.length > 0) {
+      const lineCoordinates = measurementPoints.map((p) => [p.lng, p.lat]);
+
+      const geoJsonData = {
+        type: 'FeatureCollection' as const,
+        features: [
+          {
+            type: 'Feature' as const,
+            geometry: {
+              type: 'LineString' as const,
+              coordinates: lineCoordinates
+            },
+            properties: {}
+          }
+        ]
+      };
+
+      if (map.getSource(MEASUREMENT_SOURCE_ID)) {
+        (map.getSource(MEASUREMENT_SOURCE_ID) as GeoJSONSource).setData(geoJsonData);
+      } else {
+        map.addSource(MEASUREMENT_SOURCE_ID, {
+          type: 'geojson',
+          data: geoJsonData
+        });
+      }
+
+      if (!map.getLayer(MEASUREMENT_LINE_ID)) {
+        map.addLayer({
+          id: MEASUREMENT_LINE_ID,
+          type: 'line',
+          source: MEASUREMENT_SOURCE_ID,
+          paint: {
+            'line-color': '#f59e0b',
+            'line-width': 3,
+            'line-dasharray': [2, 2]
+          }
+        });
+      }
+
+      if (!map.getLayer(MEASUREMENT_POINTS_ID)) {
+        map.addLayer({
+          id: MEASUREMENT_POINTS_ID,
+          type: 'circle',
+          source: MEASUREMENT_SOURCE_ID,
+          paint: {
+            'circle-radius': 6,
+            'circle-color': '#f59e0b',
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff'
+          }
+        });
+      }
+
+      markersRef.current['measurement-markers']?.remove();
+      delete markersRef.current['measurement-markers'];
+    } else {
+      if (map.getLayer(MEASUREMENT_POINTS_ID)) {
+        map.removeLayer(MEASUREMENT_POINTS_ID);
+      }
+      if (map.getLayer(MEASUREMENT_LINE_ID)) {
+        map.removeLayer(MEASUREMENT_LINE_ID);
+      }
+      if (map.getSource(MEASUREMENT_SOURCE_ID)) {
+        map.removeSource(MEASUREMENT_SOURCE_ID);
+      }
+    }
+  }, [measurementPoints]);
 
   return <div ref={containerRef} className="map-canvas" role="region" aria-label="Interactive world map" />;
 };

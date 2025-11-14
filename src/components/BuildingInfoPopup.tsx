@@ -1,12 +1,8 @@
+import type { BuildingInfo, ScreenPosition } from '../types';
+
 interface BuildingInfoPopupProps {
-  building: {
-    name?: string;
-    height?: number;
-    levels?: number;
-    type?: string;
-    address?: string;
-  } | null;
-  position: { x: number; y: number };
+  building: BuildingInfo | null;
+  position: ScreenPosition;
 }
 
 const BuildingInfoPopup = ({ building, position }: BuildingInfoPopupProps) => {
@@ -24,13 +20,13 @@ const BuildingInfoPopup = ({ building, position }: BuildingInfoPopupProps) => {
         <h3>{building.name || 'Building'}</h3>
       </div>
       <div className="popup-content">
-        {building.height && (
+        {typeof building.height === 'number' && (
           <div className="popup-row">
             <span className="popup-label">Height:</span>
             <span className="popup-value">{Math.round(building.height)}m</span>
           </div>
         )}
-        {building.levels && (
+        {typeof building.levels === 'number' && (
           <div className="popup-row">
             <span className="popup-label">Floors:</span>
             <span className="popup-value">{building.levels}</span>

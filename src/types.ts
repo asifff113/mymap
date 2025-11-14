@@ -14,11 +14,20 @@ export interface PlaceResult extends LatLng {
   boundingBox?: BoundingBox;
 }
 
+export interface RouteStep {
+  instruction: string;
+  name: string;
+  distance: number;
+  duration: number;
+}
+
 export interface RouteSummary {
   id: string;
   distance: number; // meters
   duration: number; // seconds
   geometry: Feature<LineString>;
+  steps?: RouteStep[];
+  isAlternate?: boolean;
 }
 
 export interface CameraTransition {
@@ -31,6 +40,7 @@ export interface ViewState extends LatLng {
   pitch: number;
   bearing: number;
   transition?: CameraTransition;
+  bounds?: BoundingBox;
 }
 
 export interface MapStyleOption {
@@ -43,3 +53,21 @@ export interface MapStyleOption {
 export type WaypointRole = 'origin' | 'destination';
 
 export type RouteProfile = 'driving' | 'walking' | 'cycling';
+
+export interface ScreenPosition {
+  x: number;
+  y: number;
+}
+
+export interface BuildingInfo {
+  name?: string;
+  height?: number;
+  levels?: number;
+  type?: string;
+  address?: string;
+}
+
+export interface BuildingHoverDetails {
+  building: BuildingInfo;
+  position: ScreenPosition;
+}
