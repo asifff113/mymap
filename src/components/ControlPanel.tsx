@@ -5,10 +5,17 @@ interface ControlPanelProps {
   activeStyleId: string;
   isGlobeView: boolean;
   showBuildings: boolean;
+  buildingScale: number;
+  timeOfDay: 'auto' | 'day' | 'night';
+  shadowIntensity: number;
   onStyleChange: (styleId: string) => void;
   onLocateMe: () => void;
   onToggleGlobe: () => void;
   onToggleBuildings: () => void;
+  onBuildingScaleChange: (value: number) => void;
+  onTimeOfDayChange: (mode: 'auto' | 'day' | 'night') => void;
+  onShadowIntensityChange: (value: number) => void;
+  onCameraPreset: (preset: 'topDown' | 'overview' | 'street') => void;
 }
 
 const ControlPanel = ({
@@ -16,10 +23,17 @@ const ControlPanel = ({
   activeStyleId,
   isGlobeView,
   showBuildings,
+  buildingScale,
+  timeOfDay,
+  shadowIntensity,
   onStyleChange,
   onLocateMe,
   onToggleGlobe,
-  onToggleBuildings
+  onToggleBuildings,
+  onBuildingScaleChange,
+  onTimeOfDayChange,
+  onShadowIntensityChange,
+  onCameraPreset
 }: ControlPanelProps) => (
   <section className="glass-panel" aria-label="Map controls">
     <h2 className="panel-title">Map controls</h2>
@@ -54,6 +68,92 @@ const ControlPanel = ({
         {showBuildings ? 'Hide 3D buildings' : '3D buildings'}
       </button>
     </div>
+
+    {showBuildings && (
+      <>
+        <div className="control-slider">
+          <label htmlFor="building-scale">Height boost</label>
+          <input
+            id="building-scale"
+            type="range"
+            min={1}
+            max={2}
+            step={0.05}
+            value={buildingScale}
+            onChange={(event) => onBuildingScaleChange(Number(event.target.value))}
+          />
+          <span>{Math.round((buildingScale - 1) * 100)}%</span>
+        </div>
+
+        <div className="control-slider">
+          <label htmlFor="shadow-intensity">Shadow intensity</label>
+          <input
+            id="shadow-intensity"
+            type="range"
+            min={0.1}
+            max={1}
+            step={0.1}
+            value={shadowIntensity}
+            onChange={(event) => onShadowIntensityChange(Number(event.target.value))}
+          />
+          <span>{Math.round(shadowIntensity * 100)}%</span>
+        </div>
+
+        <div className="control-group" style={{ marginTop: '0.6rem' }}>
+          <label className="control-label">Day/Night</label>
+          <div className="mode-toggle">
+            <button
+              type="button"
+              className={`mode-btn ${timeOfDay === 'auto' ? 'active' : ''}`}
+              onClick={() => onTimeOfDayChange('auto')}
+            >
+              Auto
+            </button>
+            <button
+              type="button"
+              className={`mode-btn ${timeOfDay === 'day' ? 'active' : ''}`}
+              onClick={() => onTimeOfDayChange('day')}
+            >
+              ☀️ Day
+            </button>
+            <button
+              type="button"
+              className={`mode-btn ${timeOfDay === 'night' ? 'active' : ''}`}
+              onClick={() => onTimeOfDayChange('night')}
+            >
+              🌙 Night
+            </button>
+          </div>
+        </div>
+
+        <div className="control-group" style={{ marginTop: '0.6rem' }}>
+          <label className="control-label">Camera Presets</label>
+          <div className="mode-toggle">
+            <button
+              type="button"
+              className="mode-btn"
+              onClick={() => onCameraPreset('topDown')}
+            >
+              ⬇️ Top
+            </button>
+            <button
+              type="button"
+              className="mode-btn"
+              onClick={() => onCameraPreset('overview')}
+            >
+              📐 45°
+            </button>
+            <button
+              type="button"
+              className="mode-btn"
+              onClick={() => onCameraPreset('street')}
+            >
+              👁️ Street
+            </button>
+          </div>
+        </div>
+      </>
+    )}
   </section>
 );
 

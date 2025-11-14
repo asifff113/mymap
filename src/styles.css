@@ -252,6 +252,108 @@ select {
   border-color: rgba(15, 23, 42, 0.55);
 }
 
+.control-slider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.65rem;
+  font-size: 0.85rem;
+  color: #0f172a;
+}
+
+.control-slider label {
+  font-weight: 600;
+  min-width: 90px;
+}
+
+.control-slider input[type='range'] {
+  flex: 1;
+  accent-color: #0f766e;
+}
+
+.control-slider span {
+  min-width: 36px;
+  text-align: right;
+  font-weight: 600;
+}
+
+.control-group {
+  margin-top: 0.8rem;
+}
+
+.control-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 0.4rem;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(15, 23, 42, 0.15);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.mode-btn:hover {
+  background: rgba(255, 255, 255, 0.9);
+  transform: translateY(-1px);
+}
+
+.mode-btn.active {
+  background: #0f766e;
+  color: white;
+  border-color: #0f766e;
+  font-weight: 600;
+}
+
+.building-info-popup {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.95);
+  color: white;
+  padding: 0.8rem;
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 1000;
+  min-width: 200px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, -110%);
+}
+
+.popup-header h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  padding-bottom: 0.4rem;
+}
+
+.popup-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.popup-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+}
+
+.popup-label {
+  opacity: 0.8;
+}
+
+.popup-value {
+  font-weight: 600;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -438,6 +540,33 @@ select {
 
 .pill-btn.active:hover {
   background: #0d9488;
+}
+
+.minimap-container {
+  position: absolute;
+  bottom: 100px;
+  right: 20px;
+  background: rgba(15, 23, 42, 0.95);
+  border-radius: 12px;
+  padding: 0.5rem;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.minimap-canvas {
+  display: block;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.minimap-info {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.4rem;
+  font-size: 0.75rem;
+  color: #e2e8f0;
+  font-weight: 600;
 }
 
 @media (max-width: 768px) {

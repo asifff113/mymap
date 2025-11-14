@@ -4,6 +4,7 @@ import SearchPanel from './components/SearchPanel';
 import RoutePlanner from './components/RoutePlanner';
 import ControlPanel from './components/ControlPanel';
 import FloatingControls from './components/FloatingControls';
+import Minimap from './components/Minimap';
 import { requestRoute } from './lib/osrm';
 import type {
   LatLng,
@@ -50,20 +51,30 @@ const App = () => {
   const [isRouting, setIsRouting] = useState(false);
   const [isGlobeView, setIsGlobeView] = useState(false);
   const [showBuildings, setShowBuildings] = useState(false);
+  const [buildingScale, setBuildingScale] = useState(1.2);
+  const [timeOfDay, setTimeOfDay] = useState<'auto' | 'day' | 'night'>('auto');
+  const [shadowIntensity, setShadowIntensity] = useState(0.7);
+  const [hoveredBuilding, setHoveredBuilding] = useState<any>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const handleViewStateChange = useCallback((next: ViewState) => {
     setViewState(next);
   }, []);
 
-  const flyToPlace = (place: PlaceResult) => {
-    setViewState((state) => ({
-      ...state,
-      lat: place.lat,
-      lng: place.lng,
-      zoom: Math.max(state.zoom, 11)
-    }));
-  };
+const flyToPlace = (place: PlaceResult) => {
+  setViewState((state) => ({
+    ...state,
+    lat: place.lat,
+    lng: place.lng,
+    zoom: Math.max(state.zoom, showBuildings ? 15.5 : 12),
+    pitch: showBuildings ? Math.max(state.pitch, 70) : Math.max(state.pitch, 48),
+    bearing: showBuildings ? ((state.bearing + 35) % 360) : state.bearing,
+    transition: {
+      duration: showBuildings ? 2400 : 1400,
+      curve: showBuildings ? 1.6 : 1.3
+    }
+  }));
+};
 
   const handleSelectPlace = (place: PlaceResult) => {
     setSelectedPlace(place);
@@ -110,7 +121,12 @@ const App = () => {
           description: 'Current location',
           ...coords
         });
-        setViewState((state) => ({ ...state, ...coords, zoom: 13 }));
+        setViewState((state) => ({
+          ...state,
+          ...coords,
+          zoom: 13,
+          transition: { duration: 1200, curve: 1.2 }
+        }));
       },
       () => setStatusMessage('Unable to read your location. Make sure permissions are granted.')
     );
@@ -131,7 +147,11 @@ const App = () => {
         lat: next ? 80 : state.lat,
         pitch: next ? 55 : 0,
         bearing: next ? 30 : 0,
-        zoom: next ? 2.7 : state.zoom
+        zoom: next ? 2.7 : state.zoom,
+        transition: {
+          duration: next ? 2000 : 1200,
+          curve: next ? 1.5 : 1.2
+        }
       }));
       return next;
     });
@@ -144,7 +164,11 @@ const App = () => {
         ...state,
         pitch: next ? Math.max(state.pitch, 68) : Math.min(state.pitch, 50),
         bearing: next ? (state.bearing || 35) : state.bearing,
-        zoom: next ? Math.max(state.zoom, 15) : state.zoom
+        zoom: next ? Math.max(state.zoom, 15) : state.zoom,
+        transition: {
+          duration: next ? 1800 : 900,
+          curve: next ? 1.6 : 1.2
+        }
       }));
       return next;
     });
@@ -153,6 +177,37 @@ const App = () => {
         ? prev
         : '3D buildings are experimental – zoom closer to city centers for taller extrusions.'
     );
+  };
+
+  const handleBuildingScaleChange = (value: number) => {
+    setBuildingScale(value);
+  };
+
+  const handleTimeOfDayChange = (mode: 'auto' | 'day' | 'night') => {
+    setTimeOfDay(mode);
+  };
+
+  const handleShadowIntensityChange = (value: number) => {
+    setShadowIntensity(value);
+  };
+
+  const setCameraPreset = (preset: 'topDown' | 'overview' | 'street') => {
+    setViewState((state) => {
+      const presets = {
+        topDown: { pitch: 0, bearing: 0, zoom: Math.max(state.zoom, 14) },
+        overview: { pitch: 60, bearing: 45, zoom: Math.max(state.zoom, 15) },
+        street: { pitch: 75, bearing: state.bearing, zoom: Math.max(state.zoom, 17) }
+      };
+      return {
+        ...state,
+        ...presets[preset],
+        transition: { duration: 1200, curve: 1.4 }
+      };
+    });
+  };
+
+  const handleBuildingHover = (building: any) => {
+    setHoveredBuilding(building);
   };
 
   const buildRoute = useCallback(
@@ -216,7 +271,8 @@ const App = () => {
   const zoomDelta = (delta: number) => {
     setViewState((state) => ({
       ...state,
-      zoom: Math.min(18, Math.max(1.25, state.zoom + delta))
+      zoom: Math.min(18, Math.max(1.25, state.zoom + delta)),
+      transition: { duration: 600 }
     }));
   };
 
@@ -224,7 +280,8 @@ const App = () => {
     setViewState((state) => ({
       ...state,
       pitch: isGlobeView ? Math.max(state.pitch, 45) : 0,
-      bearing: 0
+      bearing: 0,
+      transition: { duration: 900 }
     }));
   };
 
@@ -240,7 +297,11 @@ const App = () => {
         route={route}
         isGlobeView={isGlobeView}
         showBuildings={showBuildings}
+        buildingScale={buildingScale}
+        timeOfDay={timeOfDay}
+        shadowIntensity={shadowIntensity}
         onViewStateChange={handleViewStateChange}
+        onBuildingHover={handleBuildingHover}
       />
 
       <div className={`panel-stack${panelsMinimized ? ' minimized' : ''}`}>
@@ -278,10 +339,17 @@ const App = () => {
               activeStyleId={activeStyle.id}
               isGlobeView={isGlobeView}
               showBuildings={showBuildings}
+              buildingScale={buildingScale}
+              timeOfDay={timeOfDay}
+              shadowIntensity={shadowIntensity}
               onStyleChange={handleStyleChange}
               onLocateMe={handleLocateMe}
               onToggleGlobe={toggleGlobeView}
               onToggleBuildings={toggleBuildings}
+              onBuildingScaleChange={handleBuildingScaleChange}
+              onTimeOfDayChange={handleTimeOfDayChange}
+              onShadowIntensityChange={handleShadowIntensityChange}
+              onCameraPreset={setCameraPreset}
             />
             {!isGlobeView && (
               <section className="glass-panel" aria-live="polite">
@@ -297,6 +365,15 @@ const App = () => {
         onZoomOut={() => zoomDelta(-0.8)}
         onResetView={handleResetView}
       />
+
+      {showBuildings && (
+        <Minimap
+          center={{ lat: viewState.lat, lng: viewState.lng }}
+          bearing={viewState.bearing}
+          zoom={viewState.zoom}
+          show3D={showBuildings}
+        />
+      )}
     </div>
   );
 };

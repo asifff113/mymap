@@ -17,7 +17,11 @@ interface MapCanvasProps {
   route: RouteSummary | null;
   isGlobeView: boolean;
   showBuildings: boolean;
+  buildingScale: number;
+  timeOfDay: 'auto' | 'day' | 'night';
+  shadowIntensity: number;
   onViewStateChange: (view: ViewState) => void;
+  onBuildingHover: (building: any) => void;
 }
 
 const ROUTE_SOURCE_ID = 'route-source';
@@ -44,7 +48,11 @@ const MapCanvas = ({
   route,
   isGlobeView,
   showBuildings,
-  onViewStateChange
+  buildingScale,
+  timeOfDay,
+  shadowIntensity,
+  onViewStateChange,
+  onBuildingHover
 }: MapCanvasProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -53,6 +61,18 @@ const MapCanvas = ({
   const initialView = useRef<ViewState>(viewState);
   const initialStyle = useRef<string>(mapStyle.url);
   const satelliteZoomHandler = useRef<(() => void) | null>(null);
+  const sunAnimationRef = useRef<number | null>(null);
+  const hoveredBuildingRef = useRef<{ source: string; sourceLayer?: string; id: string | number } | null>(null);
+
+  const clearHighlightedBuilding = () => {
+    const map = mapRef.current;
+    if (!map || !hoveredBuildingRef.current) {
+      return;
+    }
+    const target = hoveredBuildingRef.current;
+    map.setFeatureState({ source: target.source, sourceLayer: target.sourceLayer, id: target.id }, { highlight: false });
+    hoveredBuildingRef.current = null;
+  };
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) {
@@ -95,6 +115,7 @@ const MapCanvas = ({
     mapRef.current = map;
     activeStyleUrl.current = mapStyle.url;
     map.addControl(new ScaleControl({ unit: 'metric' }), 'bottom-left');
+    startSunAnimation();
 
     const syncViewState = () => {
       const center = map.getCenter();
@@ -120,6 +141,11 @@ const MapCanvas = ({
         mapRef.current.off('zoom', satelliteZoomHandler.current);
         satelliteZoomHandler.current = null;
       }
+      if (sunAnimationRef.current) {
+        cancelAnimationFrame(sunAnimationRef.current);
+        sunAnimationRef.current = null;
+      }
+      clearHighlightedBuilding();
       Object.values(markersRef.current).forEach((marker) => marker.remove());
       markersRef.current = {};
       map.remove();
@@ -230,7 +256,9 @@ const MapCanvas = ({
       });
     }
 
-    map.setTerrain({ source: TERRAIN_SOURCE_ID, exaggeration: 1.2 });
+    // Sync terrain exaggeration with building scale
+    const terrainExaggeration = 1.5 * buildingScale;
+    map.setTerrain({ source: TERRAIN_SOURCE_ID, exaggeration: terrainExaggeration });
   };
 
   const removeTerrain = () => {
@@ -261,6 +289,49 @@ const MapCanvas = ({
         'sky-atmosphere-sun-intensity': 20
       }
     });
+  };
+
+  // Note: setFog is not available in MapLibre GL, removed for compatibility
+
+  const startSunAnimation = () => {
+    const animate = (time: number) => {
+      const map = mapRef.current;
+      if (!map || !map.isStyleLoaded()) {
+        return;
+      }
+
+      // Determine time based on mode
+      let hour;
+      if (timeOfDay === 'day') {
+        hour = 12;
+      } else if (timeOfDay === 'night') {
+        hour = 0;
+      } else {
+        // Auto mode uses current time or animation
+        const cycleMs = 30000;
+        const progress = (time % cycleMs) / cycleMs;
+        hour = progress * 24;
+      }
+
+      const azimuth = ((hour - 6) / 12) * 180;
+      const polar = hour < 6 || hour > 18 ? 30 : 70;
+      const baseIntensity = hour < 6 || hour > 18 ? 0.3 : 0.7;
+      const intensity = baseIntensity * shadowIntensity;
+
+      map.setLight({
+        anchor: 'viewport',
+        color: hour < 7 || hour > 19 ? 'hsl(28, 100%, 74%)' : 'hsl(0, 0%, 100%)',
+        intensity,
+        position: [1.15, azimuth, polar]
+      });
+      sunAnimationRef.current = requestAnimationFrame(animate);
+    };
+
+    if (sunAnimationRef.current) {
+      cancelAnimationFrame(sunAnimationRef.current);
+    }
+
+    sunAnimationRef.current = requestAnimationFrame(animate);
   };
 
   const removeSkyLayer = () => {
@@ -384,6 +455,27 @@ const MapCanvas = ({
     return style?.layers?.find((layer) => layer.type === 'symbol')?.id;
   };
 
+  const baseBuildingHeightExpression = () => [
+    'case',
+    ['has', 'render_height'],
+    ['get', 'render_height'],
+    ['has', 'height'],
+    ['get', 'height'],
+    ['has', 'building:levels'],
+    ['*', ['get', 'building:levels'], 4],
+    40
+  ];
+
+  const scaledBuildingHeightExpression = () => [
+    'interpolate',
+    ['linear'],
+    ['zoom'],
+    10,
+    0,
+    10.5,
+    ['*', baseBuildingHeightExpression(), buildingScale]
+  ];
+
   const ensureBuildingLayer = () => {
     const map = mapRef.current;
     if (!map || !showBuildings) {
@@ -395,8 +487,11 @@ const MapCanvas = ({
       return;
     }
 
+    const buildingHeightExpr = scaledBuildingHeightExpression();
+
     if (map.getLayer(BUILDING_LAYER_ID)) {
       map.setLayoutProperty(BUILDING_LAYER_ID, 'visibility', 'visible');
+      map.setPaintProperty(BUILDING_LAYER_ID, 'fill-extrusion-height', buildingHeightExpr);
     } else {
       const beforeLayerId = findLabelLayerId();
       map.addLayer(
@@ -405,7 +500,8 @@ const MapCanvas = ({
           type: 'fill-extrusion',
           source: sourceHint.sourceId,
           'source-layer': sourceHint.sourceLayer,
-          minzoom: 12,
+          minzoom: 10,
+          filter: ['all', ['!=', ['get', 'type'], 'roof']],
           paint: {
             'fill-extrusion-color': [
               'case',
@@ -415,26 +511,23 @@ const MapCanvas = ({
               ['get', 'colour'],
               [
                 'interpolate',
-                ['linear'],
+                ['exponential', 1.5],
                 ['coalesce', ['get', 'height'], ['get', 'render_height'], 30],
                 0,
-                '#e2e8f0',
-                60,
-                '#cbd5f5',
+                '#f1f5f9',
+                50,
+                '#e0e7ef',
+                100,
+                '#cbd5e1',
                 200,
                 '#94a3b8',
                 400,
-                '#64748b'
+                '#64748b',
+                600,
+                '#475569'
               ]
             ],
-            'fill-extrusion-height': [
-              'case',
-              ['has', 'render_height'],
-              ['*', ['get', 'render_height'], 1.1],
-              ['has', 'height'],
-              ['*', ['get', 'height'], 1.05],
-              35
-            ],
+            'fill-extrusion-height': buildingHeightExpr,
             'fill-extrusion-base': [
               'case',
               ['has', 'render_min_height'],
@@ -443,20 +536,16 @@ const MapCanvas = ({
               ['get', 'min_height'],
               0
             ],
-            'fill-extrusion-opacity': 0.96,
-            'fill-extrusion-vertical-gradient': true
+            'fill-extrusion-opacity': 0.97,
+            'fill-extrusion-vertical-gradient': true,
+            'fill-extrusion-ambient-occlusion-intensity': 0.55,
+            'fill-extrusion-ambient-occlusion-radius': 8
           }
         },
         beforeLayerId
       );
     }
 
-    map.setLight({
-      anchor: 'map',
-      color: 'hsl(0, 0%, 100%)',
-      intensity: 0.6,
-      position: [1.15, 180, 80]
-    });
   };
 
   const removeBuildingLayer = () => {
@@ -467,7 +556,6 @@ const MapCanvas = ({
     if (map.getLayer(BUILDING_LAYER_ID)) {
       map.removeLayer(BUILDING_LAYER_ID);
     }
-    map.setLight({});
   };
 
   useEffect(() => {
@@ -480,8 +568,15 @@ const MapCanvas = ({
       return;
     }
 
+    const prevStyle = activeStyleUrl.current;
     activeStyleUrl.current = mapStyle.url;
-    map.setStyle(mapStyle.url);
+    
+    try {
+      map.setStyle(mapStyle.url);
+    } catch (error) {
+      console.error('Failed to set map style:', error);
+      activeStyleUrl.current = prevStyle;
+    }
   }, [mapStyle]);
 
   useEffect(() => {
@@ -523,7 +618,13 @@ const MapCanvas = ({
         removeSatelliteLayer();
       }
     });
-  }, [isGlobeView, mapStyle]);
+  }, [isGlobeView, mapStyle, buildingScale]);
+
+  useEffect(() => {
+    if (showBuildings) {
+      withStyleReady(() => startSunAnimation());
+    }
+  }, [mapStyle, isGlobeView, timeOfDay, shadowIntensity, showBuildings]);
 
   useEffect(() => {
     withStyleReady(() => {
@@ -533,7 +634,21 @@ const MapCanvas = ({
         removeBuildingLayer();
       }
     });
-  }, [showBuildings, mapStyle]);
+  }, [showBuildings, mapStyle, buildingScale, shadowIntensity, timeOfDay]);
+
+  useEffect(() => {
+    if (!showBuildings) {
+      return;
+    }
+    withStyleReady(() => {
+      const map = mapRef.current;
+      if (!map || !map.getLayer(BUILDING_LAYER_ID)) {
+        ensureBuildingLayer();
+        return;
+      }
+      map.setPaintProperty(BUILDING_LAYER_ID, 'fill-extrusion-height', scaledBuildingHeightExpression());
+    });
+  }, [buildingScale, showBuildings]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -551,14 +666,20 @@ const MapCanvas = ({
       return;
     }
 
+    const duration = viewState.transition?.duration ?? (showBuildings ? 1500 : 900);
+    const curve = viewState.transition?.curve ?? (showBuildings ? 1.5 : 1.2);
+
     map.easeTo({
       center: [viewState.lng, viewState.lat],
       zoom: viewState.zoom,
       pitch: viewState.pitch,
       bearing: viewState.bearing,
-      duration: 800
+      duration,
+      curve,
+      easing: (t) => t * t * (3 - 2 * t),
+      essential: true
     });
-  }, [viewState]);
+  }, [viewState, showBuildings]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -572,6 +693,79 @@ const MapCanvas = ({
 
     map.setPadding(padding);
   }, [isGlobeView]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !showBuildings) {
+      clearHighlightedBuilding();
+      return;
+    }
+
+    const handleMove = (event: maplibregl.MapMouseEvent & maplibregl.EventData) => {
+      const feature = event.features?.[0];
+      if (!feature || feature.id === undefined) {
+        clearHighlightedBuilding();
+        return;
+      }
+
+      const target = {
+        source: (feature as any).source,
+        sourceLayer: (feature as any)['sourceLayer'] ?? BUILDING_SOURCE_LAYER,
+        id: feature.id as string | number
+      };
+
+      if (
+        hoveredBuildingRef.current &&
+        hoveredBuildingRef.current.id === target.id &&
+        hoveredBuildingRef.current.source === target.source
+      ) {
+        return;
+      }
+
+      clearHighlightedBuilding();
+      hoveredBuildingRef.current = target;
+      map.setFeatureState(
+        { source: target.source, sourceLayer: target.sourceLayer, id: target.id },
+        { highlight: true }
+      );
+    };
+
+    const handleLeave = () => clearHighlightedBuilding();
+
+    let listenersBound = false;
+
+    const bindHoverListeners = () => {
+      if (listenersBound || !map.getLayer(BUILDING_LAYER_ID)) {
+        return;
+      }
+      map.on('mousemove', BUILDING_LAYER_ID, handleMove);
+      map.on('mouseleave', BUILDING_LAYER_ID, handleLeave);
+      listenersBound = true;
+    };
+
+    bindHoverListeners();
+
+    const waitForLayer = () => {
+      bindHoverListeners();
+      if (listenersBound) {
+        map.off('styledata', waitForLayer);
+      }
+    };
+
+    if (!listenersBound) {
+      map.on('styledata', waitForLayer);
+    }
+
+    return () => {
+      if (listenersBound) {
+        map.off('mousemove', BUILDING_LAYER_ID, handleMove);
+        map.off('mouseleave', BUILDING_LAYER_ID, handleLeave);
+      } else {
+        map.off('styledata', waitForLayer);
+      }
+      clearHighlightedBuilding();
+    };
+  }, [showBuildings]);
 
   return <div ref={containerRef} className="map-canvas" role="region" aria-label="Interactive world map" />;
 };

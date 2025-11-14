@@ -21,10 +21,16 @@ export interface RouteSummary {
   geometry: Feature<LineString>;
 }
 
+export interface CameraTransition {
+  duration?: number;
+  curve?: number;
+}
+
 export interface ViewState extends LatLng {
   zoom: number;
   pitch: number;
   bearing: number;
+  transition?: CameraTransition;
 }
 
 export interface MapStyleOption {
