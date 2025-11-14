@@ -32,6 +32,8 @@ interface MapCanvasProps {
   drawingMode: string;
   drawingShapes: any[];
   currentDrawingPoints: LatLng[];
+  heatmapData: any[];
+  heatmapIntensity: number;
   onViewStateChange: (view: ViewState) => void;
   onBuildingHover: (details: BuildingHoverDetails | null) => void;
   onMapClick: (coords: LatLng) => void;
@@ -73,6 +75,8 @@ const MapCanvas = ({
   drawingMode,
   drawingShapes,
   currentDrawingPoints,
+  heatmapData,
+  heatmapIntensity,
   onViewStateChange,
   onBuildingHover,
   onMapClick,
@@ -1306,6 +1310,84 @@ const MapCanvas = ({
       }
     }
   }, [drawingShapes, currentDrawingPoints, drawingMode]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) {
+      return;
+    }
+
+    const HEATMAP_SOURCE_ID = 'heatmap-source';
+    const HEATMAP_LAYER_ID = 'heatmap-layer';
+
+    if (heatmapData.length > 0) {
+      const features = heatmapData.map((point) => ({
+        type: 'Feature' as const,
+        properties: {
+          intensity: point.intensity
+        },
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [point.location.lng, point.location.lat]
+        }
+      }));
+
+      const geoJsonData = {
+        type: 'FeatureCollection' as const,
+        features
+      };
+
+      if (!map.getSource(HEATMAP_SOURCE_ID)) {
+        map.addSource(HEATMAP_SOURCE_ID, {
+          type: 'geojson',
+          data: geoJsonData
+        });
+      } else {
+        (map.getSource(HEATMAP_SOURCE_ID) as maplibregl.GeoJSONSource).setData(geoJsonData);
+      }
+
+      if (!map.getLayer(HEATMAP_LAYER_ID)) {
+        map.addLayer({
+          id: HEATMAP_LAYER_ID,
+          type: 'heatmap',
+          source: HEATMAP_SOURCE_ID,
+          paint: {
+            'heatmap-weight': ['get', 'intensity'],
+            'heatmap-intensity': heatmapIntensity,
+            'heatmap-color': [
+              'interpolate',
+              ['linear'],
+              ['heatmap-density'],
+              0, 'rgba(33,102,172,0)',
+              0.2, 'rgb(103,169,207)',
+              0.4, 'rgb(209,229,240)',
+              0.6, 'rgb(253,219,199)',
+              0.8, 'rgb(239,138,98)',
+              1, 'rgb(178,24,43)'
+            ],
+            'heatmap-radius': [
+              'interpolate',
+              ['linear'],
+              ['zoom'],
+              0, 2,
+              9, 20,
+              15, 50
+            ],
+            'heatmap-opacity': 0.8
+          }
+        });
+      } else {
+        map.setPaintProperty(HEATMAP_LAYER_ID, 'heatmap-intensity', heatmapIntensity);
+      }
+    } else {
+      if (map.getLayer(HEATMAP_LAYER_ID)) {
+        map.removeLayer(HEATMAP_LAYER_ID);
+      }
+      if (map.getSource(HEATMAP_SOURCE_ID)) {
+        map.removeSource(HEATMAP_SOURCE_ID);
+      }
+    }
+  }, [heatmapData, heatmapIntensity]);
 
   return <div ref={containerRef} className="map-canvas" role="region" aria-label="Interactive world map" />;
 };

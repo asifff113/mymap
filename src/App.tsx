@@ -13,8 +13,10 @@ import ExportControls from './components/ExportControls';
 import DrawingTools from './components/DrawingTools';
 import OfflineControls from './components/OfflineControls';
 import LandmarkControls from './components/LandmarkControls';
+import HeatmapControls from './components/HeatmapControls';
 import { requestRoutes } from './lib/osrm';
 import { getNearbyLandmarks, type Landmark } from './lib/landmarks';
+import { getHeatmapData, type HeatmapLayer, type HeatmapPoint } from './lib/heatmap';
 import { exportAsGPX, exportAsGeoJSON, printDirections } from './lib/export';
 import { getCacheSize, clearCache, downloadAreaTiles, MAX_CACHE_SIZE } from './lib/tileCache';
 import type {
@@ -121,6 +123,9 @@ const App = () => {
   const [showLandmarks, setShowLandmarks] = useState(false);
   const [landmarkScale, setLandmarkScale] = useState(1.0);
   const [visibleLandmarks, setVisibleLandmarks] = useState<Landmark[]>([]);
+  const [heatmapLayer, setHeatmapLayer] = useState<HeatmapLayer>('none');
+  const [heatmapIntensity, setHeatmapIntensity] = useState(0.6);
+  const [heatmapData, setHeatmapData] = useState<HeatmapPoint[]>([]);
 
   const handleViewStateChange = useCallback((next: ViewState) => {
     setViewState(next);
@@ -882,6 +887,30 @@ const App = () => {
     setStatusMessage(`Flying to ${landmark.name}`);
   }, []);
 
+  useEffect(() => {
+    if (heatmapLayer !== 'none' && viewState.bounds) {
+      const bounds = {
+        north: viewState.bounds[1],
+        south: viewState.bounds[0],
+        east: viewState.bounds[3],
+        west: viewState.bounds[2]
+      };
+      const data = getHeatmapData(heatmapLayer, bounds);
+      setHeatmapData(data);
+    } else {
+      setHeatmapData([]);
+    }
+  }, [heatmapLayer, viewState.bounds]);
+
+  const handleHeatmapLayerChange = useCallback((layer: HeatmapLayer) => {
+    setHeatmapLayer(layer);
+    if (layer !== 'none') {
+      setStatusMessage(`${layer} heatmap enabled`);
+    } else {
+      setStatusMessage('Heatmap cleared');
+    }
+  }, []);
+
   const calculateMeasurementDistance = useCallback((points: LatLng[]): number => {
     if (points.length < 2) {
       return 0;
@@ -1044,6 +1073,8 @@ const App = () => {
         drawingMode={drawingMode}
         drawingShapes={drawingShapes}
         currentDrawingPoints={currentDrawingPoints}
+        heatmapData={heatmapData}
+        heatmapIntensity={heatmapIntensity}
         onViewStateChange={handleViewStateChange}
         onBuildingHover={handleBuildingHover}
         onMapClick={handleMapClick}
@@ -1157,6 +1188,12 @@ const App = () => {
               onToggle={() => setShowLandmarks((prev) => !prev)}
               onScaleChange={setLandmarkScale}
               onFlyToLandmark={handleFlyToLandmark}
+            />
+            <HeatmapControls
+              activeLayer={heatmapLayer}
+              heatmapIntensity={heatmapIntensity}
+              onLayerChange={handleHeatmapLayerChange}
+              onIntensityChange={setHeatmapIntensity}
             />
             {activeRoute && (
               <RouteAnimation
