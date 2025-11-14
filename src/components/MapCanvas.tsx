@@ -26,6 +26,7 @@ interface MapCanvasProps {
   shadowIntensity: number;
   isMeasuring: boolean;
   measurementPoints: LatLng[];
+  animationProgress: number;
   onViewStateChange: (view: ViewState) => void;
   onBuildingHover: (details: BuildingHoverDetails | null) => void;
   onMeasurementClick: (coords: LatLng) => void;
@@ -60,6 +61,7 @@ const MapCanvas = ({
   shadowIntensity,
   isMeasuring,
   measurementPoints,
+  animationProgress,
   onViewStateChange,
   onBuildingHover,
   onMeasurementClick
@@ -303,15 +305,26 @@ const MapCanvas = ({
         type: 'line',
         source: ROUTE_SOURCE_ID,
         paint: {
-          'line-color': '#2563eb',
+          'line-color': '#94a3b8',
           'line-width': 4,
+          'line-opacity': 0.4
+        }
+      });
+
+      map.addLayer({
+        id: `${ROUTE_LAYER_ID}-animated`,
+        type: 'line',
+        source: ROUTE_SOURCE_ID,
+        paint: {
+          'line-color': '#2563eb',
+          'line-width': 5,
           'line-opacity': 0.9
         }
       });
     }
 
     const coordinates = route.geometry.geometry.coordinates;
-    if (coordinates && coordinates.length >= 2) {
+    if (coordinates && coordinates.length >= 2 && animationProgress === 0) {
       const bounds = coordinates.reduce(
         (acc, coord) => acc.extend(coord as [number, number]),
         new maplibregl.LngLatBounds(coordinates[0] as [number, number], coordinates[0] as [number, number])
@@ -319,6 +332,55 @@ const MapCanvas = ({
       map.fitBounds(bounds, { padding: 60, duration: 1200 });
     }
   };
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !route || animationProgress === 0) {
+      return;
+    }
+
+    const animatedLayerId = `${ROUTE_LAYER_ID}-animated`;
+    if (!map.getLayer(animatedLayerId)) {
+      return;
+    }
+
+    const coordinates = route.geometry.geometry.coordinates;
+    if (!coordinates || coordinates.length === 0) {
+      return;
+    }
+
+    const cutoffIndex = Math.floor((animationProgress / 100) * coordinates.length);
+    const animatedCoords = coordinates.slice(0, Math.max(1, cutoffIndex));
+
+    const animatedGeometry: typeof route.geometry = {
+      type: 'Feature',
+      geometry: {
+        type: 'LineString',
+        coordinates: animatedCoords
+      },
+      properties: {}
+    };
+
+    const source = map.getSource(`${ROUTE_SOURCE_ID}-animated`) as GeoJSONSource | undefined;
+    if (source) {
+      source.setData(animatedGeometry);
+    } else if (map.getSource(ROUTE_SOURCE_ID)) {
+      map.addSource(`${ROUTE_SOURCE_ID}-animated`, {
+        type: 'geojson',
+        data: animatedGeometry
+      });
+      map.addLayer({
+        id: animatedLayerId,
+        type: 'line',
+        source: `${ROUTE_SOURCE_ID}-animated`,
+        paint: {
+          'line-color': '#2563eb',
+          'line-width': 5,
+          'line-opacity': 0.9
+        }
+      });
+    }
+  }, [animationProgress, route]);
 
   const ensureTerrain = () => {
     const map = mapRef.current;

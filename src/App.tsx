@@ -7,6 +7,7 @@ import FloatingControls from './components/FloatingControls';
 import Minimap from './components/Minimap';
 import BuildingInfoPopup from './components/BuildingInfoPopup';
 import MeasurementTool from './components/MeasurementTool';
+import RouteAnimation from './components/RouteAnimation';
 import { requestRoutes } from './lib/osrm';
 import type {
   BuildingHoverDetails,
@@ -91,6 +92,10 @@ const App = () => {
   const [isMeasuring, setIsMeasuring] = useState(false);
   const [measurementPoints, setMeasurementPoints] = useState<LatLng[]>([]);
   const [measurementDistance, setMeasurementDistance] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animationProgress, setAnimationProgress] = useState(0);
+  const [animationSpeed, setAnimationSpeed] = useState(1);
+  const [followCamera, setFollowCamera] = useState(true);
 
   const handleViewStateChange = useCallback((next: ViewState) => {
     setViewState(next);
@@ -617,6 +622,62 @@ const App = () => {
     }
   }, [isMeasuring]);
 
+  const getPointAlongRoute = useCallback((progress: number): LatLng | null => {
+    if (!activeRoute?.geometry?.geometry?.coordinates) {
+      return null;
+    }
+    const coords = activeRoute.geometry.geometry.coordinates;
+    if (coords.length === 0) {
+      return null;
+    }
+    const index = Math.floor((progress / 100) * (coords.length - 1));
+    const [lng, lat] = coords[Math.min(index, coords.length - 1)];
+    return { lat, lng };
+  }, [activeRoute]);
+
+  useEffect(() => {
+    if (!isAnimating || !activeRoute) {
+      return;
+    }
+
+    const animate = () => {
+      setAnimationProgress((prev) => {
+        const next = prev + animationSpeed * 0.5;
+        if (next >= 100) {
+          setIsAnimating(false);
+          return 100;
+        }
+        return next;
+      });
+    };
+
+    const intervalId = setInterval(animate, 50);
+    return () => clearInterval(intervalId);
+  }, [isAnimating, animationSpeed, activeRoute]);
+
+  useEffect(() => {
+    if (!followCamera || !activeRoute) {
+      return;
+    }
+    const point = getPointAlongRoute(animationProgress);
+    if (point) {
+      setViewState((state) => ({
+        ...state,
+        lat: point.lat,
+        lng: point.lng,
+        zoom: Math.max(state.zoom, 15),
+        transition: { duration: 300 }
+      }));
+    }
+  }, [animationProgress, followCamera, activeRoute, getPointAlongRoute]);
+
+  useEffect(() => {
+    if (activeRoute) {
+      setAnimationProgress(0);
+      setIsAnimating(false);
+    }
+  }, [activeRoute?.id]);
+
   return (
     <div className={`app-shell ${isGlobeView ? 'globe-mode' : ''}`}>
       <MapCanvas
@@ -634,6 +695,7 @@ const App = () => {
         shadowIntensity={shadowIntensity}
         isMeasuring={isMeasuring}
         measurementPoints={measurementPoints}
+        animationProgress={animationProgress}
         onViewStateChange={handleViewStateChange}
         onBuildingHover={handleBuildingHover}
         onMeasurementClick={handleMeasurementClick}
@@ -703,6 +765,18 @@ const App = () => {
                 setMeasurementDistance(0);
               }}
             />
+            {activeRoute && (
+              <RouteAnimation
+                isAnimating={isAnimating}
+                progress={animationProgress}
+                speed={animationSpeed}
+                onToggle={() => setIsAnimating((prev) => !prev)}
+                onSpeedChange={setAnimationSpeed}
+                onProgressChange={setAnimationProgress}
+                isFollowing={followCamera}
+                onToggleFollow={() => setFollowCamera((prev) => !prev)}
+              />
+            )}
             {!isGlobeView && (
               <section className="glass-panel" aria-live="polite">
                 <p className="status-banner">{infoBanner}</p>

@@ -839,3 +839,97 @@ select {
   margin-top: 0.5rem;
   flex-wrap: wrap;
 }
+
+.route-animation-controls {
+  padding: 1rem;
+  background: var(--color-panel-bg);
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  border: 1px solid var(--color-panel-border);
+}
+
+.animation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.animation-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.progress-slider {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-button-bg);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.progress-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+}
+
+.progress-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  cursor: pointer;
+  border: none;
+}
+
+.progress-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-width: 40px;
+  text-align: right;
+  color: var(--color-text);
+}
+
+.animation-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.speed-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.speed-btn {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-button-border);
+  background: var(--color-button-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+
+.speed-btn:hover {
+  background: var(--color-button-hover);
+}
+
+.speed-btn.active {
+  background: var(--color-primary);
+  color: var(--color-primary-light);
+  border-color: var(--color-primary);
+  font-weight: 600;
+}
