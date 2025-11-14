@@ -12,7 +12,9 @@ import GeoLocationControl from './components/GeoLocationControl';
 import ExportControls from './components/ExportControls';
 import DrawingTools from './components/DrawingTools';
 import OfflineControls from './components/OfflineControls';
+import LandmarkControls from './components/LandmarkControls';
 import { requestRoutes } from './lib/osrm';
+import { getNearbyLandmarks, type Landmark } from './lib/landmarks';
 import { exportAsGPX, exportAsGeoJSON, printDirections } from './lib/export';
 import { getCacheSize, clearCache, downloadAreaTiles, MAX_CACHE_SIZE } from './lib/tileCache';
 import type {
@@ -116,6 +118,9 @@ const App = () => {
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [cacheSize, setCacheSize] = useState(0);
   const [cacheProgress, setCacheProgress] = useState<number | null>(null);
+  const [showLandmarks, setShowLandmarks] = useState(false);
+  const [landmarkScale, setLandmarkScale] = useState(1.0);
+  const [visibleLandmarks, setVisibleLandmarks] = useState<Landmark[]>([]);
 
   const handleViewStateChange = useCallback((next: ViewState) => {
     setViewState(next);
@@ -854,6 +859,29 @@ const App = () => {
     setStatusMessage(isOfflineMode ? 'Online mode enabled' : 'Offline mode enabled');
   }, [isOfflineMode]);
 
+  useEffect(() => {
+    if (showLandmarks) {
+      const nearby = getNearbyLandmarks({ lat: viewState.lat, lng: viewState.lng }, 500);
+      setVisibleLandmarks(nearby);
+    }
+  }, [showLandmarks, viewState.lat, viewState.lng]);
+
+  const handleFlyToLandmark = useCallback((landmark: Landmark) => {
+    setViewState((state) => ({
+      ...state,
+      lat: landmark.location.lat,
+      lng: landmark.location.lng,
+      zoom: 16,
+      pitch: 60,
+      bearing: 45,
+      transition: {
+        duration: 2000,
+        curve: 1.5
+      }
+    }));
+    setStatusMessage(`Flying to ${landmark.name}`);
+  }, []);
+
   const calculateMeasurementDistance = useCallback((points: LatLng[]): number => {
     if (points.length < 2) {
       return 0;
@@ -1121,6 +1149,14 @@ const App = () => {
               onToggleOffline={handleToggleOffline}
               onDownloadArea={handleDownloadArea}
               onClearCache={handleClearCache}
+            />
+            <LandmarkControls
+              showLandmarks={showLandmarks}
+              landmarkScale={landmarkScale}
+              visibleLandmarks={visibleLandmarks}
+              onToggle={() => setShowLandmarks((prev) => !prev)}
+              onScaleChange={setLandmarkScale}
+              onFlyToLandmark={handleFlyToLandmark}
             />
             {activeRoute && (
               <RouteAnimation

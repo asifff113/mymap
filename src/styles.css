@@ -1107,6 +1107,78 @@ select {
   background: rgba(20, 184, 166, 0.15);
 }
 
+/* Landmark Controls */
+.landmark-controls {
+  padding: 1rem;
+  background: var(--color-panel-bg);
+  border-radius: 12px;
+  border: 1px solid var(--color-panel-border);
+}
+
+.landmark-scale-control {
+  margin-top: 0.75rem;
+}
+
+.landmarks-list {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-panel-border);
+}
+
+.landmarks-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.landmark-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: var(--color-button-bg);
+  border: 1px solid var(--color-button-border);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--color-text);
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.landmark-item:hover {
+  background: var(--color-button-hover);
+  border-color: var(--color-primary);
+  transform: translateX(4px);
+}
+
+.landmark-name {
+  font-weight: 500;
+}
+
+.landmark-height {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.landmark-hint {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: var(--color-primary-light);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+:root[data-theme='dark'] .landmark-hint {
+  background: rgba(20, 184, 166, 0.1);
+}
+
 /* Drawing Tools */
 .drawing-tools {
   padding: 1rem;
