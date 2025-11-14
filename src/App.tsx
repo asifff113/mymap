@@ -9,7 +9,9 @@ import BuildingInfoPopup from './components/BuildingInfoPopup';
 import MeasurementTool from './components/MeasurementTool';
 import RouteAnimation from './components/RouteAnimation';
 import GeoLocationControl from './components/GeoLocationControl';
+import ExportControls from './components/ExportControls';
 import { requestRoutes } from './lib/osrm';
+import { exportAsGPX, exportAsGeoJSON, printDirections } from './lib/export';
 import type {
   BuildingHoverDetails,
   LatLng,
@@ -101,6 +103,7 @@ const App = () => {
   const [isTracking, setIsTracking] = useState(false);
   const [followPosition, setFollowPosition] = useState(true);
   const [geoAccuracy, setGeoAccuracy] = useState<number | null>(null);
+  const [mapCanvas, setMapCanvas] = useState<HTMLCanvasElement | null>(null);
 
   const handleViewStateChange = useCallback((next: ViewState) => {
     setViewState(next);
@@ -592,6 +595,50 @@ const App = () => {
     setMeasurementPoints((prev) => [...prev, coords]);
   }, [isMeasuring]);
 
+  const handleScreenshot = useCallback(() => {
+    if (!mapCanvas) {
+      setStatusMessage('Map not ready for screenshot');
+      return;
+    }
+    mapCanvas.toBlob((blob) => {
+      if (!blob) {
+        setStatusMessage('Failed to capture screenshot');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `map-screenshot-${new Date().toISOString().slice(0, 10)}.png`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setStatusMessage('Screenshot saved');
+    });
+  }, [mapCanvas]);
+
+  const handleExportRoute = useCallback((format: 'gpx' | 'geojson') => {
+    const route = routes.find((r) => r.id === activeRouteId);
+    if (!route) {
+      setStatusMessage('No route selected');
+      return;
+    }
+    if (format === 'gpx') {
+      exportAsGPX(route, origin, destination);
+      setStatusMessage('GPX file exported');
+    } else {
+      exportAsGeoJSON(route);
+      setStatusMessage('GeoJSON file exported');
+    }
+  }, [routes, activeRouteId, origin, destination]);
+
+  const handlePrintDirections = useCallback(() => {
+    const route = routes.find((r) => r.id === activeRouteId);
+    if (!route) {
+      setStatusMessage('No route selected');
+      return;
+    }
+    printDirections(route, origin, destination);
+  }, [routes, activeRouteId, origin, destination]);
+
   const calculateMeasurementDistance = useCallback((points: LatLng[]): number => {
     if (points.length < 2) {
       return 0;
@@ -754,6 +801,7 @@ const App = () => {
         onViewStateChange={handleViewStateChange}
         onBuildingHover={handleBuildingHover}
         onMeasurementClick={handleMeasurementClick}
+        onMapReady={setMapCanvas}
       />
 
       <div className={`panel-stack${panelsMinimized ? ' minimized' : ''}`}>
@@ -830,6 +878,12 @@ const App = () => {
               accuracy={geoAccuracy}
               onToggleTracking={() => setIsTracking((prev) => !prev)}
               onToggleFollowing={() => setFollowPosition((prev) => !prev)}
+            />
+            <ExportControls
+              hasRoute={!!activeRoute}
+              onScreenshot={handleScreenshot}
+              onExport={handleExportRoute}
+              onPrint={handlePrintDirections}
             />
             {activeRoute && (
               <RouteAnimation

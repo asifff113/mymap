@@ -32,6 +32,7 @@ interface MapCanvasProps {
   onViewStateChange: (view: ViewState) => void;
   onBuildingHover: (details: BuildingHoverDetails | null) => void;
   onMeasurementClick: (coords: LatLng) => void;
+  onMapReady?: (canvas: HTMLCanvasElement | null) => void;
 }
 
 const ROUTE_SOURCE_ID = 'route-source';
@@ -68,7 +69,8 @@ const MapCanvas = ({
   searchResults,
   onViewStateChange,
   onBuildingHover,
-  onMeasurementClick
+  onMeasurementClick,
+  onMapReady
 }: MapCanvasProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -216,6 +218,12 @@ const MapCanvas = ({
     };
 
     map.on('click', handleMapClick);
+
+    // Notify parent of canvas availability for screenshots
+    map.once('load', () => {
+      const canvas = map.getCanvas();
+      onMapReady?.(canvas);
+    });
 
     const resize = () => map.resize();
     window.addEventListener('resize', resize);
