@@ -8,6 +8,7 @@ import Minimap from './components/Minimap';
 import BuildingInfoPopup from './components/BuildingInfoPopup';
 import MeasurementTool from './components/MeasurementTool';
 import RouteAnimation from './components/RouteAnimation';
+import GeoLocationControl from './components/GeoLocationControl';
 import { requestRoutes } from './lib/osrm';
 import type {
   BuildingHoverDetails,
@@ -97,6 +98,9 @@ const App = () => {
   const [animationSpeed, setAnimationSpeed] = useState(1);
   const [followCamera, setFollowCamera] = useState(true);
   const [searchResults, setSearchResults] = useState<PlaceResult[]>([]);
+  const [isTracking, setIsTracking] = useState(false);
+  const [followPosition, setFollowPosition] = useState(true);
+  const [geoAccuracy, setGeoAccuracy] = useState<number | null>(null);
 
   const handleViewStateChange = useCallback((next: ViewState) => {
     setViewState(next);
@@ -679,6 +683,54 @@ const App = () => {
     }
   }, [activeRoute?.id]);
 
+  useEffect(() => {
+    if (!isTracking) {
+      setGeoAccuracy(null);
+      return;
+    }
+
+    if (!('geolocation' in navigator)) {
+      setStatusMessage('Geolocation is not supported by your browser');
+      setIsTracking(false);
+      return;
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const newLocation = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        };
+        setUserLocation(newLocation);
+        setGeoAccuracy(position.coords.accuracy);
+
+        if (followPosition) {
+          setViewState((state) => ({
+            ...state,
+            lat: newLocation.lat,
+            lng: newLocation.lng,
+            zoom: Math.max(state.zoom, 16),
+            transition: { duration: 500 }
+          }));
+        }
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        setStatusMessage(`Location error: ${error.message}`);
+        setIsTracking(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, [isTracking, followPosition]);
+
   return (
     <div className={`app-shell ${isGlobeView ? 'globe-mode' : ''}`}>
       <MapCanvas
@@ -688,6 +740,7 @@ const App = () => {
         origin={origin}
         destination={destination}
         userLocation={userLocation}
+        geoAccuracy={geoAccuracy}
         route={activeRoute}
         isGlobeView={isGlobeView}
         showBuildings={showBuildings}
@@ -770,6 +823,13 @@ const App = () => {
                 setMeasurementPoints([]);
                 setMeasurementDistance(0);
               }}
+            />
+            <GeoLocationControl
+              isTracking={isTracking}
+              isFollowing={followPosition}
+              accuracy={geoAccuracy}
+              onToggleTracking={() => setIsTracking((prev) => !prev)}
+              onToggleFollowing={() => setFollowPosition((prev) => !prev)}
             />
             {activeRoute && (
               <RouteAnimation

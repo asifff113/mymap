@@ -18,6 +18,7 @@ interface MapCanvasProps {
   origin: PlaceResult | null;
   destination: PlaceResult | null;
   userLocation: LatLng | null;
+  geoAccuracy: number | null;
   route: RouteSummary | null;
   isGlobeView: boolean;
   showBuildings: boolean;
@@ -54,6 +55,7 @@ const MapCanvas = ({
   origin,
   destination,
   userLocation,
+  geoAccuracy,
   route,
   isGlobeView,
   showBuildings,
@@ -809,6 +811,73 @@ const MapCanvas = ({
       delete markersRef.current[key];
     });
   }, [searchResults, viewState.zoom, mapStyle]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !userLocation || !geoAccuracy) {
+      if (map?.getSource('accuracy-circle')) {
+        map.removeLayer('accuracy-circle-fill');
+        map.removeLayer('accuracy-circle-border');
+        map.removeSource('accuracy-circle');
+      }
+      return;
+    }
+
+    const createCircle = (center: [number, number], radiusInMeters: number, points = 64) => {
+      const coords: number[][] = [];
+      const distanceX = radiusInMeters / (111320 * Math.cos((center[1] * Math.PI) / 180));
+      const distanceY = radiusInMeters / 110540;
+
+      for (let i = 0; i <= points; i++) {
+        const theta = (i / points) * (2 * Math.PI);
+        const x = distanceX * Math.cos(theta);
+        const y = distanceY * Math.sin(theta);
+        coords.push([center[0] + x, center[1] + y]);
+      }
+      return coords;
+    };
+
+    const circleCoords = createCircle([userLocation.lng, userLocation.lat], geoAccuracy);
+
+    const circleGeoJSON = {
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Polygon' as const,
+        coordinates: [circleCoords]
+      },
+      properties: {}
+    };
+
+    if (map.getSource('accuracy-circle')) {
+      (map.getSource('accuracy-circle') as GeoJSONSource).setData(circleGeoJSON);
+    } else {
+      map.addSource('accuracy-circle', {
+        type: 'geojson',
+        data: circleGeoJSON
+      });
+
+      map.addLayer({
+        id: 'accuracy-circle-fill',
+        type: 'fill',
+        source: 'accuracy-circle',
+        paint: {
+          'fill-color': '#f59e0b',
+          'fill-opacity': 0.15
+        }
+      });
+
+      map.addLayer({
+        id: 'accuracy-circle-border',
+        type: 'line',
+        source: 'accuracy-circle',
+        paint: {
+          'line-color': '#f59e0b',
+          'line-width': 2,
+          'line-opacity': 0.6
+        }
+      });
+    }
+  }, [userLocation, geoAccuracy]);
 
   useEffect(() => {
     withStyleReady(() => {
